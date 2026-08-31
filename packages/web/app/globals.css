@@ -1,0 +1,92 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #07090f;
+  --color-vault: #0d1220;
+  --color-vault-raised: #141b2c;
+  --color-vault-line: #24304a;
+  --color-parchment: #ece4d4;
+  --color-parchment-dim: #9c927e;
+  --color-brass: #b08c4e;
+  --color-brass-bright: #dcbc78;
+  --color-vermilion: #bf4a30;
+
+  --font-display: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-parchment);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 400;
+  }
+
+  ::selection {
+    background: var(--color-brass);
+    color: var(--color-ink);
+  }
+}
+
+@utility rule-hairline {
+  border-top: 1px solid color-mix(in srgb, var(--color-brass) 45%, transparent);
+}
+
+/* Engraved line-work borrowed from banknote security printing. Deliberately
+   faint — texture, not decoration. */
+@utility guilloche {
+  background-image:
+    repeating-radial-gradient(
+      circle at 18% 120%,
+      color-mix(in srgb, var(--color-brass) 9%, transparent) 0 1px,
+      transparent 1px 13px
+    ),
+    repeating-radial-gradient(
+      circle at 88% -20%,
+      color-mix(in srgb, var(--color-brass) 7%, transparent) 0 1px,
+      transparent 1px 17px
+    );
+}
+
+@utility engraved {
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.85),
+    0 -1px 0 color-mix(in srgb, var(--color-brass) 22%, transparent);
+}
+
+/* The date-match reveal: digits settle into place rather than bounce. */
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35em);
+    letter-spacing: 0.4em;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: normal;
+  }
+}
+
+@utility settle-in {
+  animation: settle 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settle-in {
+    animation: none;
+  }
+}

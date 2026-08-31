@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test \"test/**/*.test.ts\"",
-    "migrate:check": "node src/apply.ts"
+    "migrate:check": "node src/apply.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.16",

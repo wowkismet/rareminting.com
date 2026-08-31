@@ -1,18 +1,31 @@
+import Image from 'next/image';
+
 import { CATALOGUE, tagCounts, topByRarity } from '@/lib/catalogue.ts';
 import { SUGGESTED_DATES, formatLongDate, parseIsoDate, search } from '@/lib/search.ts';
 import { NoteCard } from '@/components/NoteCard.tsx';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * The logo already carries its own gold rules and flourish, so it is given
+ * space rather than the engraved hairlines the text wordmark needed.
+ *
+ * `h1` wraps it because this is the page's primary heading; the alt text is
+ * what a screen reader and a search engine actually read.
+ */
 function Wordmark() {
   return (
-    <div className="inline-block text-center">
-      <div className="rule-hairline w-full" />
-      <h1 className="px-2 py-2 font-display text-2xl tracking-[0.42em] text-cream sm:text-3xl">
-        RARE MINTING
-      </h1>
-      <div className="rule-hairline w-full" />
-    </div>
+    <h1 className="flex justify-center">
+      <Image
+        src="/rare-minting-logo.png"
+        alt="Rare Minting"
+        width={2171}
+        height={724}
+        priority
+        sizes="(min-width: 640px) 420px, 300px"
+        className="h-auto w-[300px] sm:w-[420px]"
+      />
+    </h1>
   );
 }
 

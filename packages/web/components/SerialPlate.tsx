@@ -2,9 +2,9 @@ import type { DateInterpretation } from '@rareminting/serial-engine';
 import { kindAt, segmentsFor } from '@/lib/segments.ts';
 
 const KIND_COLOR: Record<string, string> = {
-  day: 'text-brass-bright',
-  month: 'text-parchment',
-  year: 'text-brass-bright',
+  day: 'text-accent-bright',
+  month: 'text-cream',
+  year: 'text-accent-bright',
 };
 
 /**
@@ -28,18 +28,18 @@ export function SerialPlate({
   const scale = size === 'lg' ? 'text-4xl sm:text-5xl' : 'text-2xl';
 
   return (
-    <div className="guilloche rounded-sm border border-vault-line bg-vault-raised/70 px-4 py-3">
+    <div className="guilloche rounded-sm border border-line bg-primary px-4 py-3">
       <div className="flex items-baseline gap-3 font-mono">
         {prefix !== null && (
-          <span className="text-parchment-dim text-sm tracking-[0.2em]">
+          <span className="text-cream-dim text-sm tracking-[0.2em]">
             {prefix}
-            {isStar && <span className="text-vermilion">*</span>}
+            {isStar && <span className="text-ember">*</span>}
           </span>
         )}
         <span className={`${scale} engraved tracking-[0.14em] tabular-nums`}>
           {digits.split('').map((digit, index) => {
             const kind = kindAt(index, segments);
-            const colour = kind === null ? 'text-parchment' : KIND_COLOR[kind] ?? 'text-parchment';
+            const colour = kind === null ? 'text-cream' : KIND_COLOR[kind] ?? 'text-cream';
             return (
               <span
                 key={index}
@@ -54,7 +54,7 @@ export function SerialPlate({
       </div>
 
       {segments.length > 0 && (
-        <div className="mt-1 flex gap-3 font-mono text-[10px] uppercase tracking-[0.25em] text-parchment-dim">
+        <div className="mt-1 flex gap-3 font-mono text-[10px] uppercase tracking-[0.25em] text-cream-dim">
           {segments.map((segment) => (
             <span key={segment.kind}>{segment.kind}</span>
           ))}

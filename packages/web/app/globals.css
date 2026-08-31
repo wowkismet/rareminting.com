@@ -1,29 +1,39 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-ink: #07090f;
-  --color-vault: #0d1220;
-  --color-vault-raised: #141b2c;
-  --color-vault-line: #24304a;
-  --color-parchment: #ece4d4;
-  --color-parchment-dim: #9c927e;
-  --color-brass: #b08c4e;
-  --color-brass-bright: #dcbc78;
-  --color-vermilion: #bf4a30;
+  /* ---- Brand palette. Supplied values, used verbatim. ----
+     Exposed across the site as bg-primary / bg-secondary / text-accent etc. */
+  --color-primary: #1a4a2e;         /* deep forest green */
+  --color-secondary: #1a4a46;       /* deep teal */
+  --color-accent: #c9a84c;          /* antique gold */
 
-  --font-display: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
-  --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  /* ---- Dark zone: masthead, hero, footer, serial plates. ---- */
+  --color-ink: #0a1f14;             /* deepest ground, the primary pushed down */
+  --color-line: #2d6045;            /* hairlines on green */
+  --color-cream: #f3ede1;           /* body text on green */
+  --color-cream-dim: #a9c0b0;       /* 5.3:1 on primary */
+  --color-accent-bright: #e3c887;   /* 6.2:1 on primary — small gold labels */
+
+  /* ---- Light zone: the catalogue body. ---- */
+  --color-sand: #ede4d3;            /* page surface */
+  --color-sand-raised: #f7f2e8;     /* cards sitting on sand */
+  --color-sand-line: #d9cdb6;       /* hairlines on sand */
+  --color-slate: #0d2418;           /* headings and body text on sand */
+  --color-slate-dim: #55665c;       /* 4.8:1 on sand */
+  --color-accent-deep: #7a6224;     /* 4.7:1 on sand — gold that survives on cream */
+
+  --color-ember: #cf7250;           /* star marker: warm, legible on green */
+
+  /* Faces resolve to next/font's self-hosted families, with real fallbacks. */
+  --font-display: var(--font-playfair), Georgia, 'Times New Roman', serif;
+  --font-ui: var(--font-inter), 'Segoe UI', system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, Consolas, monospace;
 }
 
 @layer base {
-  html {
-    color-scheme: dark;
-  }
-
   body {
-    background-color: var(--color-ink);
-    color: var(--color-parchment);
+    background-color: var(--color-sand);
+    color: var(--color-slate);
     font-family: var(--font-ui);
     -webkit-font-smoothing: antialiased;
   }
@@ -33,16 +43,22 @@
   h3 {
     font-family: var(--font-display);
     font-weight: 400;
+    text-wrap: balance;
   }
 
   ::selection {
-    background: var(--color-brass);
+    background: var(--color-accent);
     color: var(--color-ink);
   }
 }
 
+/* Hairline rules, one per ground. */
 @utility rule-hairline {
-  border-top: 1px solid color-mix(in srgb, var(--color-brass) 45%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+@utility rule-sand {
+  border-top: 1px solid var(--color-sand-line);
 }
 
 /* Engraved line-work borrowed from banknote security printing. Deliberately
@@ -51,20 +67,20 @@
   background-image:
     repeating-radial-gradient(
       circle at 18% 120%,
-      color-mix(in srgb, var(--color-brass) 9%, transparent) 0 1px,
+      color-mix(in srgb, var(--color-accent) 10%, transparent) 0 1px,
       transparent 1px 13px
     ),
     repeating-radial-gradient(
       circle at 88% -20%,
-      color-mix(in srgb, var(--color-brass) 7%, transparent) 0 1px,
+      color-mix(in srgb, var(--color-accent) 8%, transparent) 0 1px,
       transparent 1px 17px
     );
 }
 
 @utility engraved {
   text-shadow:
-    0 1px 0 rgba(0, 0, 0, 0.85),
-    0 -1px 0 color-mix(in srgb, var(--color-brass) 22%, transparent);
+    0 1px 0 rgba(0, 0, 0, 0.7),
+    0 -1px 0 color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 
 /* The date-match reveal: digits settle into place rather than bounce. */

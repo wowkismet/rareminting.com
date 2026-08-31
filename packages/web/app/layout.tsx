@@ -1,6 +1,27 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { Inter, JetBrains_Mono, Playfair_Display } from 'next/font/google';
 import './globals.css';
+
+// Self-hosted at build time by next/font — no runtime CDN request, no FOUT
+// from a third party, and nothing to break if Google is blocked.
+const display = Playfair_Display({
+  subsets: ['latin'],
+  variable: '--font-playfair',
+  display: 'swap',
+});
+
+const body = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
+  display: 'swap',
+});
 
 const SITE_URL = 'https://www.rareminting.com';
 const DESCRIPTION =
@@ -27,7 +48,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
+    >
       <body className="min-h-screen">{children}</body>
     </html>
   );

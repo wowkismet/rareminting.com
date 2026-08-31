@@ -11,7 +11,7 @@ import { Pool } from 'pg';
 
 import { createApp } from './app.ts';
 import { clientIp } from './http.ts';
-import type { Db } from './db.ts';
+import type { Database, Db } from './db.ts';
 
 function toRequest(req: IncomingMessage, origin: string): Request {
   const url = new URL(req.url ?? '/', origin);
@@ -59,12 +59,36 @@ async function main(): Promise<void> {
   }
 
   const pool = new Pool({ connectionString });
-  const db: Db = {
+
+  const db: Database = {
     // pg types rows as QueryResultRow; the caller declares the shape it expects,
     // which is exactly the boundary where that assertion belongs.
     async query<R>(sql: string, params?: readonly unknown[]) {
       const result = await pool.query(sql, params === undefined ? undefined : [...params]);
       return { rows: result.rows as R[] };
+    },
+    // A transaction must hold one connection for its whole life. Issuing
+    // BEGIN/COMMIT through the pool would spread them over different
+    // connections and isolate nothing.
+    async transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
+      const client = await pool.connect();
+      const tx: Db = {
+        async query<R>(sql: string, params?: readonly unknown[]) {
+          const result = await client.query(sql, params === undefined ? undefined : [...params]);
+          return { rows: result.rows as R[] };
+        },
+      };
+      try {
+        await client.query('begin');
+        const result = await fn(tx);
+        await client.query('commit');
+        return result;
+      } catch (error) {
+        await client.query('rollback');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   };
 

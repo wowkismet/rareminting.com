@@ -1,10 +1,9 @@
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 
-import { createSchema } from '@rareminting/db/src/apply.ts';
-import { createApp, type App } from '../src/app.ts';
-import type { Db } from '../src/db.ts';
+import { createRig, reset } from './helpers.ts';
+import type { App } from '../src/app.ts';
 
 /**
  * End-to-end against the real schema and the real handlers. PGlite gives us
@@ -15,13 +14,11 @@ import type { Db } from '../src/db.ts';
 let db: PGlite;
 let app: App;
 
-// scrypt is deliberately slow; drop the cost so the suite stays quick. This is
-// the only place the parameter is lowered.
-process.env['PASSWORD_SCRYPT_N'] = String(2 ** 14);
 
 before(async () => {
-  ({ db } = await createSchema());
-  app = createApp(db as unknown as Db);
+  const rig = await createRig();
+  db = rig.pg;
+  app = rig.app;
 });
 
 after(async () => {
@@ -29,11 +26,7 @@ after(async () => {
 });
 
 beforeEach(async () => {
-  // audit_logs is append-only by trigger, so it is truncated rather than deleted.
-  await db.exec(`
-    truncate login_attempts, sessions, user_roles, audit_logs restart identity cascade;
-    delete from users;
-  `);
+  await reset(db);
 });
 
 const IP = '203.0.113.7';

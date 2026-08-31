@@ -5,12 +5,14 @@
  * testable by calling one function.
  */
 
-import type { Db } from './db.ts';
+import type { Database } from './db.ts';
 import { badRequest, notFound } from './errors.ts';
 import type { Ctx } from './http.ts';
 import { bearerToken, createRouter, errorResponse, json } from './http.ts';
 import { resolveSession, type Session } from './sessions.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerSellerRoutes } from './routes/sellers.ts';
+import { registerListingRoutes } from './routes/listings.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -18,11 +20,13 @@ export interface App {
 
 const MAX_BODY_BYTES = 1_000_000;
 
-export function createApp(db: Db): App {
+export function createApp(db: Database): App {
   const router = createRouter();
 
   router.add('GET', '/health', async () => json({ status: 'ok' }));
   registerAuthRoutes(router);
+  registerSellerRoutes(router);
+  registerListingRoutes(router, db);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {

@@ -7,12 +7,18 @@
 
 set -euo pipefail
 
-DOMAIN="${1:?usage: provision.sh <domain>   e.g. staging.rareminting.com}"
+if [ "$#" -lt 1 ]; then
+  echo "usage: provision.sh <domain> [more domains...]" >&2
+  echo "  e.g. provision.sh srv1936995.hstgr.cloud staging.rareminting.com" >&2
+  exit 1
+fi
+DOMAINS="$*"
+PRIMARY="$1"
 APP_USER="rareminting"
 APP_DIR="/srv/rareminting"
 PORT="3000"
 
-echo "==> Provisioning for ${DOMAIN}"
+echo "==> Provisioning for: ${DOMAINS}"
 
 # --- packages -----------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
@@ -48,7 +54,7 @@ cat > /etc/nginx/sites-available/rareminting <<NGINX
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN};
+    server_name ${DOMAINS};
 
     # Next.js emits immutable, content-hashed asset filenames.
     location /_next/static/ {
@@ -110,6 +116,6 @@ cat <<DONE
 Next:
   1. bash deploy.sh <git-url> [branch]
   2. Point DNS at this server, wait for it to resolve
-  3. certbot --nginx -d ${DOMAIN}      (only after DNS resolves)
+  3. certbot --nginx -d ${PRIMARY}      (only after DNS resolves)
 
 DONE

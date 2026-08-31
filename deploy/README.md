@@ -1,11 +1,17 @@
 # Deploying Rare Minting
 
-Hostinger VPS (Ubuntu, KVM 4) + domain at GoDaddy.
+Hostinger VPS (Ubuntu, KVM 4). Domain at GoDaddy, but you do not need it to get
+a working HTTPS site.
 
-Replace `<VPS_IP>` below with your server's IP, shown in hPanel under VPS.
+**Deploy to the Hostinger hostname first.** `srv1936995.hstgr.cloud` already
+resolves to the server, so you can be live on real HTTPS with no DNS change at
+all — and `rareminting.com` stays parked and untouched until you actually want
+to launch. Pointing your own domain becomes a one-record change afterwards.
 
-Do these in order. Steps 4 and 5 are order-dependent — TLS cannot be issued
-before DNS resolves, and DNS should not be pointed before the server answers.
+```
+srv1936995.hstgr.cloud → 200.234.42.251
+                       → 2a02:4780:63:a6b1::1
+```
 
 ---
 
@@ -26,71 +32,83 @@ any strategy documents out of it — `.gitignore` already excludes `*.docx`.
 
 Hostinger hPanel → VPS → Manage → **Browser terminal**. No SSH key needed.
 
-## 2. Provision the server (once)
-
-Upload `provision.sh` and `deploy.sh`, or paste them in with `nano`.
-
 ```bash
-bash provision.sh staging.rareminting.com
+cd /root
+git clone https://github.com/wowkismet/rareminting.com.git
+cd rareminting.com/deploy
 ```
 
-Installs Node 24, Nginx, UFW; creates an unprivileged `rareminting` user; writes
-the Nginx site and a systemd unit. Idempotent — safe to re-run.
-
-## 3. Deploy the app
+## 2. Provision the server (once, ~3 minutes)
 
 ```bash
-bash deploy.sh https://github.com/<you>/rare-minting.git main
+bash provision.sh srv1936995.hstgr.cloud
+```
+
+Installs Node 24 and Nginx, enables the firewall (SSH is allowed *before* UFW
+comes up, so you cannot lock yourself out), creates an unprivileged
+`rareminting` user, and writes the Nginx site and a systemd unit. Idempotent —
+safe to re-run.
+
+Accepts several hostnames if you want to serve your own domain alongside:
+
+```bash
+bash provision.sh srv1936995.hstgr.cloud staging.rareminting.com
+```
+
+## 3. Deploy
+
+```bash
+bash deploy.sh https://github.com/wowkismet/rareminting.com.git main
 ```
 
 Builds, assembles a timestamped release, flips the `current` symlink, restarts
-the service and smoke-tests it. Fails loudly with logs if the service does not
-come up.
+the service and smoke-tests it. Ends with `==> Deployed. HTTP 200 from
+127.0.0.1:3000`, or fails loudly with the service logs.
 
-Verify from your own machine — the site answers on the IP before any DNS:
+Check it from your own machine:
 
+```powershell
+curl.exe -I http://srv1936995.hstgr.cloud
 ```
-curl -I http://<VPS_IP>
+
+Must return `HTTP/1.1 200 OK` before step 4.
+
+## 4. HTTPS
+
+DNS already resolves, so this works immediately:
+
+```bash
+apt-get install -y certbot python3-certbot-nginx
+certbot --nginx -d srv1936995.hstgr.cloud
 ```
 
-## 4. Point DNS at the server (GoDaddy)
+Certbot rewrites the Nginx site for TLS and installs a renewal timer. Confirm
+with `systemctl list-timers | grep certbot`.
 
-Only now, once step 3 returns HTTP 200.
+**You now have a working site at https://srv1936995.hstgr.cloud.**
 
-**Recommended — staging subdomain, leaves the live domain alone:**
+## 5. Your own domain — only when you want to launch
+
+At GoDaddy, DNS → Add New Record:
 
 | Field | Value |
 | --- | --- |
 | Type | `A` |
 | Name | `staging` |
-| Data | `<VPS_IP>` |
+| Data | `200.234.42.251` |
 | TTL | 600 seconds |
-
-**Or the real domain** — edit the existing `A @` record from `Parked` to
-`<VPS_IP>`. Leave the `www` CNAME pointing at `rareminting.com`; it
-follows the apex automatically. Do **not** convert `www` to an A record.
 
 Leave `NS`, `SOA`, `_domainconnect` and the `_dmarc` TXT untouched.
 
-Check propagation:
+To use the live domain instead, edit the existing `A @` record from `Parked` to
+the server IP. Leave the `www` CNAME pointing at `rareminting.com`; it follows
+the apex automatically. Do **not** convert `www` to an A record.
+
+Then re-provision with both names and re-issue the certificate:
 
 ```bash
-nslookup staging.rareminting.com 8.8.8.8
-```
-
-## 5. TLS
-
-Once the name resolves to the VPS:
-
-```bash
-apt-get install -y certbot python3-certbot-nginx
-certbot --nginx -d staging.rareminting.com
-```
-
-Certbot rewrites the Nginx site for HTTPS and installs a renewal timer. Confirm:
-
-```bash
-systemctl list-timers | grep certbot
+bash provision.sh srv1936995.hstgr.cloud staging.rareminting.com
+certbot --nginx -d srv1936995.hstgr.cloud -d staging.rareminting.com
 ```
 
 ---
@@ -100,7 +118,7 @@ systemctl list-timers | grep certbot
 ```bash
 systemctl status rareminting          # is it up
 journalctl -u rareminting -f          # live logs
-systemctl restart rareminting         # restart
+systemctl restart rareminting
 ```
 
 **Roll back** to the previous release without rebuilding:
@@ -113,12 +131,31 @@ systemctl restart rareminting
 
 ## Notes
 
-- The app listens on `127.0.0.1:3000` only. Nginx is the sole public listener,
+- The app listens on `127.0.0.1:3000` only; Nginx is the sole public listener,
   so port 3000 is never exposed.
 - The service runs as `rareminting`, never root.
 - Next's standalone output omits `.next/static` and `public/` by design;
-  `deploy.sh` copies them in. Skipping that step yields an unstyled site — the
-  most common standalone deployment failure.
-- What ships today is a **prototype**: 200 seeded notes, no database, no
-  accounts, no payments. Deploy it to staging, not to the public domain, unless
-  you specifically want the demo publicly visible.
+  `deploy.sh` copies them in. Skipping that yields an unstyled site — the most
+  common standalone deployment failure.
+- Nginx listens on IPv6 as well, which this host has.
+
+## Hardening, once SSH key auth is confirmed working
+
+The server currently accepts password auth for root, which is a standing
+brute-force target. After you have verified a key login succeeds, add to
+`/etc/ssh/sshd_config`:
+
+```
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+```
+
+then `systemctl restart ssh`. Do this **only** after a key login is proven —
+otherwise you lose SSH entirely and are left with the browser terminal.
+
+## What actually deploys today
+
+A prototype: 200 seeded notes, no database behind the storefront, no accounts,
+payments or seller listings on the public site. The API service
+(`packages/api`) has registration and sign-in but is not yet wired to the web
+app or started by these scripts.

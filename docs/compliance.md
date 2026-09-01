@@ -48,7 +48,7 @@ common reason a merchant application stalls.
 | --- | --- | --- |
 | **Terms of use** | That notes are sold as numismatic collectibles at a collector's premium, not as currency exchange. Seller obligations, buyer obligations, auction rules. | Lawyer |
 | **Privacy** | What is collected, why, retention, DPDP Act consent and withdrawal, who data is shared with (gateway, KYC provider, couriers). | Lawyer |
-| **Refunds & cancellations** | The inspection window, what qualifies for a refund, how long a refund takes. | **You** — this is a commercial decision, then legal review |
+| **Refunds & cancellations** | The inspection window, what qualifies for a refund, how long a refund takes. | **Drafted** at `/refunds`. Terms live in `packages/config/src/policy.ts`. Confirm the assumptions, then legal review. |
 | **Shipping** | Dispatch times, insured shipping thresholds, delivery confirmation, unboxing-video requirement. | **You**, then legal review |
 | **Contact & grievances** | Registered address, grievance officer name and contact, response timeline. | You |
 

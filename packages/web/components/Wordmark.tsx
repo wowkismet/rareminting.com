@@ -18,9 +18,9 @@ export function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
   return (
     <span
-      className={`font-display font-bold italic text-cream ${scale} leading-none tracking-[0.01em]`}
+      className={`font-display font-bold italic text-cream ${scale} leading-none tracking-[0.06em]`}
     >
-      RareMinting
+      RAREMINTING
     </span>
   );
 }

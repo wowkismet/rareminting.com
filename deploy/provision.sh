@@ -142,6 +142,18 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 
+# Writing the site file above discards the 443 server block certbot added, which
+# silently takes HTTPS down on every re-provision. If a certificate already
+# exists, put it straight back.
+if [ -d /etc/letsencrypt/live ] && command -v certbot >/dev/null 2>&1; then
+  CERT_DOMAIN="$(ls -1 /etc/letsencrypt/live 2>/dev/null | grep -v README | head -1 || true)"
+  if [ -n "${CERT_DOMAIN}" ]; then
+    echo "==> Re-applying TLS for ${CERT_DOMAIN} (the new nginx config dropped it)"
+    certbot --nginx --reinstall --redirect --non-interactive       --cert-name "${CERT_DOMAIN}" >/dev/null 2>&1 ||       echo "!! could not re-apply TLS; run: certbot --nginx -d ${CERT_DOMAIN}" >&2
+    nginx -t && systemctl reload nginx
+  fi
+fi
+
 # --- systemd unit -------------------------------------------------------
 # Binds to loopback only; nginx is the sole public listener.
 cat > /etc/systemd/system/rareminting.service <<UNIT

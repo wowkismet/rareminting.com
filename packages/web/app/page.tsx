@@ -4,6 +4,8 @@ import { CATALOGUE, tagCounts, topByRarity } from '@/lib/catalogue.ts';
 import { SUGGESTED_DATES, formatLongDate, parseIsoDate, search } from '@/lib/search.ts';
 import { NoteCard } from '@/components/NoteCard.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { SiteHeader } from '@/components/SiteHeader.tsx';
+import { currentUser } from '@/lib/session.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +67,7 @@ export default async function Home({
   searchParams: Promise<{ date?: string }>;
 }) {
   const params = await searchParams;
+  const user = await currentUser();
   const target = parseIsoDate(params.date);
   const results = target === null ? null : search(target.iso);
   const rails = tagCounts().slice(0, 8);
@@ -72,11 +75,12 @@ export default async function Home({
 
   return (
     <div>
-      {/* ---------- Dark zone: masthead and hero ---------- */}
+      <SiteHeader user={user} />
+
+      {/* ---------- Dark zone: hero ---------- */}
       <div className="guilloche bg-primary">
         <div className="mx-auto max-w-6xl px-5">
-          <header className="flex flex-col items-center gap-3 py-12">
-            <Wordmark />
+          <header className="flex flex-col items-center gap-3 pt-6">
             <p className="font-display text-sm italic text-cream-dim">
               Where numbers become heirlooms.
             </p>

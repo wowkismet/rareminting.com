@@ -13,6 +13,8 @@ import { resolveSession, type Session } from './sessions.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerSellerRoutes } from './routes/sellers.ts';
 import { registerListingRoutes } from './routes/listings.ts';
+import { registerAdminRoutes } from './routes/admin.ts';
+import { registerMediaRoutes } from './routes/media.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -27,6 +29,8 @@ export function createApp(db: Database): App {
   registerAuthRoutes(router);
   registerSellerRoutes(router);
   registerListingRoutes(router, db);
+  registerAdminRoutes(router);
+  registerMediaRoutes(router);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {

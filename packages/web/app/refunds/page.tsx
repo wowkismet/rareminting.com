@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 
 import { COMPANY, POLICY_LAST_UPDATED, REFUND_POLICY, rupees } from '@rareminting/config';
 
 import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { Wordmark } from '@/components/Wordmark.tsx';
 
 export const metadata: Metadata = {
   title: 'Refunds & Cancellations',
@@ -42,15 +42,7 @@ export default function RefundsPage() {
       <header className="guilloche bg-primary">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-5 py-10">
           <a href="/" aria-label="Rare Minting home">
-            <Image
-              src="/rare-minting-logo.png"
-              alt="Rare Minting"
-              width={2171}
-              height={724}
-              priority
-              sizes="240px"
-              className="h-auto w-[240px]"
-            />
+            <Wordmark />
           </a>
           <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent-bright">
             Refunds &amp; cancellations

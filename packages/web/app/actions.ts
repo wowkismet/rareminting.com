@@ -155,3 +155,63 @@ export async function publishListing(data: FormData): Promise<void> {
   revalidatePath('/account');
   revalidatePath(`/listing/${id}`);
 }
+
+/* ---------------- staff ---------------- */
+
+export async function setKycState(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const sellerId = text(data, 'sellerId');
+  const kycState = text(data, 'kycState');
+  const reason = text(data, 'reason');
+  if (sellerId === '' || kycState === '') return;
+
+  await api(`/v1/admin/sellers/${sellerId}/kyc`, {
+    method: 'POST',
+    token,
+    body: { kycState, ...(reason === '' ? {} : { reason }) },
+  });
+  revalidatePath('/admin');
+}
+
+export async function moderateListing(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const state = text(data, 'state');
+  const reason = text(data, 'reason');
+  if (listingId === '' || state === '') return;
+
+  await api(`/v1/admin/listings/${listingId}/state`, {
+    method: 'POST',
+    token,
+    body: { state, ...(reason === '' ? {} : { reason }) },
+  });
+  revalidatePath('/admin');
+  revalidatePath(`/listing/${listingId}`);
+}
+
+export async function uploadPhoto(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const file = data.get('file');
+  if (listingId === '' || !(file instanceof File) || file.size === 0) return;
+
+  // Forwarded as multipart, so the bytes stream through rather than being
+  // buffered into JSON.
+  const forward = new FormData();
+  forward.set('file', file, file.name);
+  forward.set('kind', text(data, 'kind') || 'obverse');
+
+  await fetch(`${process.env['API_URL'] ?? 'http://127.0.0.1:4000'}/v1/listings/${listingId}/media`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: forward,
+  }).catch(() => undefined);
+
+  revalidatePath(`/listing/${listingId}`);
+}

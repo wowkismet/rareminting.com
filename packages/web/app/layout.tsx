@@ -9,6 +9,9 @@ const display = Playfair_Display({
   subsets: ['latin'],
   variable: '--font-playfair',
   display: 'swap',
+  // The wordmark is set in the bold italic cut, so both axes are needed.
+  weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
 });
 
 const body = Inter({

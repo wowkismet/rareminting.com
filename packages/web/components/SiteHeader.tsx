@@ -1,14 +1,23 @@
-import Image from 'next/image';
-
 import { signOut } from '@/app/actions.ts';
 import type { ApiUser } from '@/lib/api.ts';
+import { Wordmark } from './Wordmark.tsx';
 
 /**
- * The masthead, with whatever the visitor can currently do.
+ * The masthead and primary navigation.
  *
- * Signed out: sign in, or start selling. Signed in: their account.
- * `compact` is for interior pages, where the logo does not need to dominate.
+ * Every link here goes to a page that exists. "Admin" appears only for staff —
+ * not hidden as a security measure (the API is the boundary) but because a
+ * console a buyer cannot open should not be advertised to them.
  */
+
+const LINKS = [
+  { href: '/', label: 'Home' },
+  { href: '/about', label: 'About us' },
+  { href: '/auctions', label: 'Auctions' },
+  { href: '/browse', label: 'Buy now' },
+  { href: '/sell', label: 'Sell now' },
+] as const;
+
 export function SiteHeader({
   user,
   compact = false,
@@ -16,44 +25,58 @@ export function SiteHeader({
   user: ApiUser | null;
   compact?: boolean;
 }) {
+  const isAdmin = user?.roles.includes('admin') ?? false;
+
   return (
     <div className="guilloche bg-primary">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-5">
         <a href="/" aria-label="Rare Minting home" className="shrink-0">
-          <Image
-            src="/rare-minting-logo.png"
-            alt="Rare Minting"
-            width={2171}
-            height={724}
-            priority
-            sizes={compact ? '200px' : '260px'}
-            className={compact ? 'h-auto w-[190px]' : 'h-auto w-[230px]'}
-          />
+          <Wordmark size={compact ? 'sm' : 'md'} />
         </a>
 
-        <nav className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-          <a className="text-cream-dim transition-colors hover:text-accent-bright" href="/browse">
-            Browse
-          </a>
+        <nav aria-label="Main" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          {LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-cream-dim transition-colors hover:text-accent-bright"
+            >
+              {link.label}
+            </a>
+          ))}
+
+          {isAdmin && (
+            <a
+              href="/admin"
+              className="rounded-full border border-accent/50 px-3 py-1 text-xs text-accent-bright transition-colors hover:bg-accent hover:text-ink"
+            >
+              Admin
+            </a>
+          )}
+
+          <span aria-hidden className="hidden h-4 w-px bg-line sm:block" />
 
           {user === null ? (
             <>
-              <a className="text-cream-dim transition-colors hover:text-accent-bright" href="/signin">
+              <a
+                className="text-cream-dim transition-colors hover:text-accent-bright"
+                href="/signin"
+              >
                 Sign in
               </a>
               <a
                 className="rounded-full bg-accent px-5 py-2 font-medium text-ink transition-colors hover:bg-accent-bright"
                 href="/signup"
               >
-                Start selling
+                Create account
               </a>
             </>
           ) : (
             <>
-              <a className="text-cream-dim transition-colors hover:text-accent-bright" href="/sell">
-                Sell a note
-              </a>
-              <a className="text-cream-dim transition-colors hover:text-accent-bright" href="/account">
+              <a
+                className="text-cream-dim transition-colors hover:text-accent-bright"
+                href="/account"
+              >
                 {user.fullName ?? user.email.split('@')[0]}
               </a>
               <form action={signOut}>

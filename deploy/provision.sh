@@ -39,7 +39,7 @@ echo "==> node $(node -v), npm $(npm -v)"
 if ! id -u "$APP_USER" >/dev/null 2>&1; then
   adduser --system --group --home "$APP_DIR" "$APP_USER"
 fi
-mkdir -p "$APP_DIR/releases"
+mkdir -p "$APP_DIR/releases" "$APP_DIR/uploads"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 # --- database -----------------------------------------------------------
@@ -99,6 +99,16 @@ server {
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
+    # Seller photographs, served from disk. nosniff matters here: these are
+    # visitor-supplied files, and a browser must never be talked into
+    # interpreting one as script.
+    location /media/ {
+        alias __APP_DIR__/uploads/;
+        add_header X-Content-Type-Options "nosniff" always;
+        expires 30d;
+        access_log off;
+    }
+
     # The API is a separate service on 4000. The trailing slash on proxy_pass
     # strips the /api prefix, so the service sees the paths it registers.
     location /api/ {
@@ -124,7 +134,7 @@ server {
 }
 NGINX
 
-sed -i "s|__DOMAINS__|${DOMAINS}|g; s|__PORT__|${PORT}|g" \
+sed -i "s|__DOMAINS__|${DOMAINS}|g; s|__PORT__|${PORT}|g; s|__APP_DIR__|${APP_DIR}|g" \
   /etc/nginx/sites-available/rareminting
 
 ln -sfn /etc/nginx/sites-available/rareminting /etc/nginx/sites-enabled/rareminting
@@ -166,6 +176,7 @@ Requires=postgresql.service
 Type=simple
 User=${APP_USER}
 WorkingDirectory=${APP_DIR}/current/api
+Environment=UPLOAD_DIR=${APP_DIR}/uploads
 EnvironmentFile=/etc/rareminting.env
 ExecStart=/usr/bin/node src/server.ts
 Restart=always

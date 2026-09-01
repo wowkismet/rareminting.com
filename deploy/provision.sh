@@ -82,21 +82,25 @@ ufw --force enable
 ufw status verbose
 
 # --- nginx reverse proxy ------------------------------------------------
-cat > /etc/nginx/sites-available/rareminting <<NGINX
+# The heredoc is quoted, so bash expands nothing and every Nginx variable is
+# written literally. The two values that genuinely come from this script are
+# substituted afterwards. Escaping each $ individually is how this went wrong
+# before: one missed escape and `set -u` aborts the whole provision.
+cat > /etc/nginx/sites-available/rareminting <<'NGINX'
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAINS};
+    server_name __DOMAINS__;
 
     # Next.js emits immutable, content-hashed asset filenames.
     location /_next/static/ {
-        proxy_pass http://127.0.0.1:${PORT};
+        proxy_pass http://127.0.0.1:__PORT__;
         proxy_cache_valid 200 60m;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
 
-    # The API is a separate service on 4000. Strip the /api prefix so the
-    # service sees the paths it actually registers.
+    # The API is a separate service on 4000. The trailing slash on proxy_pass
+    # strips the /api prefix, so the service sees the paths it registers.
     location /api/ {
         proxy_pass http://127.0.0.1:4000/;
         proxy_http_version 1.1;
@@ -107,18 +111,21 @@ server {
     }
 
     location / {
-        proxy_pass http://127.0.0.1:${PORT};
+        proxy_pass http://127.0.0.1:__PORT__;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
     }
 }
 NGINX
+
+sed -i "s|__DOMAINS__|${DOMAINS}|g; s|__PORT__|${PORT}|g" \
+  /etc/nginx/sites-available/rareminting
 
 ln -sfn /etc/nginx/sites-available/rareminting /etc/nginx/sites-enabled/rareminting
 rm -f /etc/nginx/sites-enabled/default

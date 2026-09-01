@@ -24,7 +24,7 @@ echo "==> Provisioning for: ${DOMAINS}"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get upgrade -y
-apt-get install -y curl git nginx ufw ca-certificates gnupg
+apt-get install -y curl git nginx ufw ca-certificates gnupg postgresql postgresql-contrib
 
 # --- Node 24 (NodeSource) ----------------------------------------------
 if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d. -f1)" != "v24" ]; then
@@ -41,6 +41,38 @@ if ! id -u "$APP_USER" >/dev/null 2>&1; then
 fi
 mkdir -p "$APP_DIR/releases"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+
+# --- database -----------------------------------------------------------
+# Postgres listens on localhost only; the firewall never opens 5432.
+systemctl enable --now postgresql
+
+DB_NAME="rareminting"
+DB_USER="rareminting"
+ENV_FILE="/etc/rareminting.env"
+
+if ! sudo -u postgres psql -tAc "select 1 from pg_roles where rolname='${DB_USER}'" | grep -q 1; then
+  # Generated here and never printed: nothing needs to read it but the service.
+  DB_PASS="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)"
+  sudo -u postgres psql -c "create role ${DB_USER} login password '${DB_PASS}'" >/dev/null
+  sudo -u postgres psql -c "create database ${DB_NAME} owner ${DB_USER}" >/dev/null
+
+  install -m 600 /dev/null "${ENV_FILE}"
+  cat > "${ENV_FILE}" <<ENVFILE
+# Written by provision.sh. Readable by root only.
+DATABASE_URL=postgres://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}
+NODE_ENV=production
+PORT=4000
+HOST=127.0.0.1
+TRUST_PROXY=1
+# Payment keys go here. Use rzp_test_ until the flow is proven.
+# RAZORPAY_KEY_ID=
+# RAZORPAY_KEY_SECRET=
+# RAZORPAY_WEBHOOK_SECRET=
+ENVFILE
+  echo "==> database created; credentials written to ${ENV_FILE}"
+else
+  echo "==> database role already exists; leaving ${ENV_FILE} untouched"
+fi
 
 # --- firewall -----------------------------------------------------------
 # Order matters: allow SSH *before* enabling, or you lock yourself out.
@@ -61,6 +93,17 @@ server {
         proxy_pass http://127.0.0.1:${PORT};
         proxy_cache_valid 200 60m;
         add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # The API is a separate service on 4000. Strip the /api prefix so the
+    # service sees the paths it actually registers.
+    location /api/ {
+        proxy_pass http://127.0.0.1:4000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location / {
@@ -106,8 +149,30 @@ PrivateTmp=true
 WantedBy=multi-user.target
 UNIT
 
+cat > /etc/systemd/system/rareminting-api.service <<UNIT
+[Unit]
+Description=Rare Minting API
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=${APP_USER}
+WorkingDirectory=${APP_DIR}/current/api
+EnvironmentFile=/etc/rareminting.env
+ExecStart=/usr/bin/node src/server.ts
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 systemctl daemon-reload
 systemctl enable rareminting
+systemctl enable rareminting-api
 
 cat <<DONE
 

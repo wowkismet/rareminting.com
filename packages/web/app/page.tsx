@@ -237,16 +237,29 @@ export default async function Home({
         </section>
       </main>
 
-      {/* ---------- Dark footer ---------- */}
+      {/* ---------- Dark footer ----------
+          The operating entity, the non-affiliation disclaimer and the grievance
+          contact are not decoration: the Consumer Protection (E-Commerce) Rules
+          require a marketplace to identify its legal entity and publish a
+          grievance officer, and payment gateways check for them before they
+          activate an account. */}
       <footer className="bg-primary">
-        <div className="mx-auto max-w-6xl px-5 py-12">
+        <div className="mx-auto flex max-w-6xl flex-col gap-5 px-5 py-12">
           <p className="max-w-3xl text-xs leading-relaxed text-cream-dim">
-            Rare Minting is an independent collectibles marketplace. It is not affiliated with,
-            endorsed by, or licensed by the Reserve Bank of India, the India Government Mint, or
-            any government body. Notes are offered as numismatic collectibles at a
-            collector&rsquo;s premium, not as currency exchange.
+            Rare Minting is a brand of <span className="text-cream">Lexoraa Luxury Private Limited</span>.
+            It is an independent collectibles marketplace, and is not affiliated with, endorsed by,
+            or licensed by the Reserve Bank of India, the India Government Mint, or any government
+            body. Notes are offered as numismatic collectibles at a collector&rsquo;s premium, not
+            as currency exchange.
           </p>
-          <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.3em] text-cream-dim">
+
+          {/* Policy links belong here — Terms, Privacy, Refunds & Cancellations,
+              Shipping, and Contact with a grievance officer. They are omitted
+              rather than linked to pages that do not exist yet; see
+              docs/compliance.md for what each must contain and who decides it.
+              All five are required before payments can be activated. */}
+
+          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-cream-dim">
             www.rareminting.com · {CATALOGUE.length} notes · seed catalogue · prototype
           </p>
         </div>

@@ -60,6 +60,16 @@ for pkg in db config serial-engine; do
   ln -sfn "${RELEASE}/${pkg}" "${RELEASE}/api/node_modules/@rareminting/${pkg}"
 done
 
+# Node resolves imports from the *file's* directory upwards, so a script under
+# db/src cannot see api/node_modules. Give each sibling its own link to the same
+# tree — the migration runner imports 'pg' from db/src/migrate.ts.
+# Not a link into the release root: that already holds the Next standalone's own
+# trimmed node_modules, and replacing it would break the web app.
+for pkg in db config serial-engine; do
+  rm -rf "${RELEASE}/${pkg}/node_modules"
+  ln -sfn "${RELEASE}/api/node_modules" "${RELEASE}/${pkg}/node_modules"
+done
+
 chown -R "${APP_USER}:${APP_USER}" "$APP_DIR"
 ln -sfn "$RELEASE" "${APP_DIR}/current"
 

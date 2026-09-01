@@ -215,3 +215,66 @@ export async function uploadPhoto(data: FormData): Promise<void> {
 
   revalidatePath(`/listing/${listingId}`);
 }
+
+/* ---------------- buying ---------------- */
+
+export async function buyNow(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  const result = await api<{ order: { id: string } }>(`/v1/listings/${listingId}/order`, {
+    method: 'POST',
+    token,
+  });
+
+  if (!result.ok) {
+    // The listing page shows the reason; nothing is half-created either way.
+    redirect(`/listing/${listingId}?error=${encodeURIComponent(result.error.message)}`);
+  }
+
+  revalidatePath('/browse');
+  redirect(`/orders/${result.data.order.id}`);
+}
+
+export async function makeOffer(_prev: FormState, data: FormData): Promise<FormState> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const amountInr = Number(text(data, 'amountInr'));
+  const message = text(data, 'message');
+
+  if (!Number.isFinite(amountInr) || amountInr <= 0) {
+    return { error: 'Enter how much you would like to offer.', field: 'amountInr' };
+  }
+
+  const result = await api(`/v1/listings/${listingId}/offers`, {
+    method: 'POST',
+    token,
+    body: { amountInr, ...(message === '' ? {} : { message }) },
+  });
+
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(`/listing/${listingId}`);
+  redirect('/orders');
+}
+
+export async function respondToOffer(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const offerId = text(data, 'offerId');
+  const decision = text(data, 'decision');
+  if (offerId === '' || decision === '') return;
+
+  await api(`/v1/offers/${offerId}/respond`, {
+    method: 'POST',
+    token,
+    body: { decision },
+  });
+  revalidatePath('/orders');
+}

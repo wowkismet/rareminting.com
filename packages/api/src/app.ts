@@ -15,6 +15,7 @@ import { registerSellerRoutes } from './routes/sellers.ts';
 import { registerListingRoutes } from './routes/listings.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
 import { registerMediaRoutes } from './routes/media.ts';
+import { registerOrderRoutes } from './routes/orders.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -31,6 +32,7 @@ export function createApp(db: Database): App {
   registerListingRoutes(router, db);
   registerAdminRoutes(router);
   registerMediaRoutes(router);
+  registerOrderRoutes(router, db);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {

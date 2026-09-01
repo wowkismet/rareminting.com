@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { publishListing } from '@/app/actions.ts';
+import { buyNow, publishListing } from '@/app/actions.ts';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
@@ -19,8 +19,15 @@ const ERA: Record<string, string> = {
   future: 'Future',
 };
 
-export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ListingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { id } = await params;
+  const { error } = await searchParams;
   const user = await currentUser();
   const token = await sessionToken();
 
@@ -122,6 +129,44 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               ))}
             </ul>
           </section>
+        )}
+
+        {error !== undefined && (
+          <p
+            role="alert"
+            className="rounded-sm border border-ember/50 bg-ember/10 px-4 py-3 text-sm text-slate"
+          >
+            {error}
+          </p>
+        )}
+
+        {listing.state === 'minted' && (
+          <div className="flex flex-wrap items-center gap-4 rounded-sm border border-accent-deep/40 bg-sand-raised p-5">
+            <form action={buyNow}>
+              <input type="hidden" name="listingId" value={listing.id} />
+              <button
+                type="submit"
+                className="rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+              >
+                Buy now
+                {listing.priceInr !== null &&
+                  ` · ₹${listing.priceInr.toLocaleString('en-IN')}`}
+              </button>
+            </form>
+            <p className="text-xs text-slate-dim">
+              Your payment is held until the note reaches you and the{' '}
+              <a href="/refunds" className="underline underline-offset-4">
+                inspection window
+              </a>{' '}
+              closes.
+            </p>
+          </div>
+        )}
+
+        {listing.state === 'reserved' && (
+          <p className="rounded-sm border border-sand-line bg-sand-raised p-5 text-sm text-slate-dim">
+            This note is reserved for another buyer.
+          </p>
         )}
 
         {listing.state === 'draft' && (

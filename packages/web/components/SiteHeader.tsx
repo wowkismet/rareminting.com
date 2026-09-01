@@ -75,6 +75,12 @@ export function SiteHeader({
             <>
               <a
                 className="text-cream-dim transition-colors hover:text-accent-bright"
+                href="/orders"
+              >
+                Orders
+              </a>
+              <a
+                className="text-cream-dim transition-colors hover:text-accent-bright"
                 href="/account"
               >
                 {user.fullName ?? user.email.split('@')[0]}

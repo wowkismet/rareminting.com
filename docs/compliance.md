@@ -11,25 +11,32 @@ concrete list rather than a blank page. Have counsel confirm before launch, as
 
 ---
 
-## 1. Details only you can supply
+## 1. Entity details
 
-These are deliberately left blank rather than guessed. Inventing a CIN or an
-address would put a false record on a public site.
+Anything still marked _to supply_ is deliberately blank rather than guessed —
+inventing a grievance officer would put a false record on a public site.
 
 | Field | Value | Where it appears |
 | --- | --- | --- |
 | Legal name | Lexoraa Luxury Private Limited | Footer, About, invoices, gateway |
-| CIN | _to supply_ | Footer, About |
-| GSTIN | _to supply_ | Commission invoices |
-| Registered address | _to supply_ | Footer or Contact page |
+| CIN | U46620MH2009PTC197360 | Footer, About |
+| GSTIN | 27AACCJ2555L1ZC | Commission invoices |
+| Registered address | Office No. 1028, IJMIMA Complex, Mind Space, Malad West, Mumbai 400064 | Footer or Contact page |
 | Grievance officer: name | _to supply_ | Contact page |
 | Grievance officer: email | _to supply_ | Contact page |
 | Grievance officer: phone | _to supply_ | Contact page |
 | Customer support email | _to supply_ | Contact page, order emails |
 
-Once you have these, they belong in one config module rather than scattered
-through the markup, so an invoice, a page footer and a certificate cannot drift
-apart.
+These live in `packages/config` and are rendered from there, so an invoice, a
+page footer and a certificate cannot drift apart. That package's tests assert
+the GSTIN checksum and the CIN structure, so a typo introduced later fails the
+build instead of reaching a public page.
+
+**What was and was not verified.** The numbers are well-formed and consistent
+with each other: the GSTIN passes its own mod-36 checksum, its embedded PAN
+identifies a company, and both it and the CIN place the entity in Maharashtra as
+a private limited company. That is *not* the same as confirming they are
+registered to this company — check the GST portal and the MCA register for that.
 
 ## 2. Pages required before payments can go live
 

@@ -1,5 +1,7 @@
 import Image from 'next/image';
 
+import { COMPANY, formattedAddress } from '@rareminting/config';
+
 import { CATALOGUE, tagCounts, topByRarity } from '@/lib/catalogue.ts';
 import { SUGGESTED_DATES, formatLongDate, parseIsoDate, search } from '@/lib/search.ts';
 import { NoteCard } from '@/components/NoteCard.tsx';
@@ -246,12 +248,21 @@ export default async function Home({
       <footer className="bg-primary">
         <div className="mx-auto flex max-w-6xl flex-col gap-5 px-5 py-12">
           <p className="max-w-3xl text-xs leading-relaxed text-cream-dim">
-            Rare Minting is a brand of <span className="text-cream">Lexoraa Luxury Private Limited</span>.
-            It is an independent collectibles marketplace, and is not affiliated with, endorsed by,
-            or licensed by the Reserve Bank of India, the India Government Mint, or any government
-            body. Notes are offered as numismatic collectibles at a collector&rsquo;s premium, not
-            as currency exchange.
+            {COMPANY.brand} is a brand of{' '}
+            <span className="text-cream">{COMPANY.legalName}</span>. It is an independent
+            collectibles marketplace, and is not affiliated with, endorsed by, or licensed by the
+            Reserve Bank of India, the India Government Mint, or any government body. Notes are
+            offered as numismatic collectibles at a collector&rsquo;s premium, not as currency
+            exchange.
           </p>
+
+          <address className="max-w-3xl text-xs not-italic leading-relaxed text-cream-dim">
+            {formattedAddress()}
+            <br />
+            <span className="font-mono">
+              CIN {COMPANY.cin} · GSTIN {COMPANY.gstin}
+            </span>
+          </address>
 
           {/* Policy links belong here — Terms, Privacy, Refunds & Cancellations,
               Shipping, and Contact with a grievance officer. They are omitted

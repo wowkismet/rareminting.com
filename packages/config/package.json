@@ -1,0 +1,18 @@
+{
+  "name": "@rareminting/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Operating-entity details and registration-number validators.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

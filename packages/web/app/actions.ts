@@ -130,6 +130,32 @@ export async function registerSeller(_prev: FormState, data: FormData): Promise<
   redirect('/sell');
 }
 
+
+/**
+ * Attach a photograph to a listing that was just created.
+ *
+ * The listing has to exist before a photo can hang off it, so the create forms
+ * carry the file and this runs immediately afterwards. A failure here is
+ * deliberately swallowed: the listing was created and the seller should not be
+ * told it failed because the picture did not upload — they can add one from
+ * the dashboard.
+ */
+async function attachPhoto(token: string, listingId: string, data: FormData): Promise<void> {
+  const file = data.get('photo');
+  if (!(file instanceof File) || file.size === 0) return;
+
+  const forward = new FormData();
+  forward.set('file', file, file.name);
+  forward.set('kind', 'obverse');
+
+  const base = process.env['API_URL'] ?? 'http://127.0.0.1:4000';
+  await fetch(`${base}/v1/listings/${listingId}/media`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    body: forward,
+  }).catch(() => undefined);
+}
+
 export async function createListing(_prev: FormState, data: FormData): Promise<FormState> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');
@@ -167,7 +193,10 @@ export async function createListing(_prev: FormState, data: FormData): Promise<F
     return { error: result.error.message, field: field ?? null };
   }
 
+  await attachPhoto(token, result.data.listing.id, data);
+
   revalidatePath('/account');
+  revalidatePath('/seller');
   redirect(`/listing/${result.data.listing.id}`);
 }
 
@@ -454,6 +483,8 @@ export async function createCollectible(
     const field = result.error.details ? Object.keys(result.error.details)[0] : null;
     return { error: result.error.message, field: field ?? null };
   }
+
+  await attachPhoto(token, result.data.listing.id, data);
 
   revalidatePath('/seller');
   redirect(`/listing/${result.data.listing.id}`);

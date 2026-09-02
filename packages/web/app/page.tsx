@@ -16,16 +16,76 @@ export const dynamic = 'force-dynamic';
  * an alert we have no way to send.
  */
 
-/** Occasions people search for. The fixed ones search; the rest jump to the field. */
+/**
+ * Occasions, which are all dates.
+ *
+ * The personal ones jump to the date field — only you know your wedding day.
+ * The historic ones are fixed, so they search straight away.
+ */
 const OCCASIONS: readonly { emoji: string; label: string; href: string }[] = [
   { emoji: '🎂', label: 'Birthday', href: '#date' },
   { emoji: '💍', label: 'Wedding', href: '#date' },
+  { emoji: '💐', label: 'Engagement', href: '#date' },
   { emoji: '❤️', label: 'Anniversary', href: '#date' },
-  { emoji: '🎓', label: 'Graduation', href: '#date' },
   { emoji: '🍼', label: 'A birth', href: '#date' },
+  { emoji: '🎓', label: 'Graduation', href: '#date' },
+  { emoji: '🏡', label: 'A new home', href: '#date' },
+  { emoji: '💼', label: 'A first job', href: '#date' },
+  { emoji: '🏢', label: 'A company founded', href: '#date' },
   { emoji: '🌅', label: 'Retirement', href: '#date' },
   { emoji: '🇮🇳', label: 'Independence Day', href: '/?date=1947-08-15' },
   { emoji: '🎉', label: 'Republic Day', href: '/?date=1950-01-26' },
+  { emoji: '🕊️', label: 'Gandhi Jayanti', href: '/?date=1869-10-02' },
+];
+
+/**
+ * Collections, which are patterns in the serial rather than dates.
+ *
+ * Every serial is read for these when it is listed, so each of these is a real
+ * indexed query rather than a category somebody has to curate by hand.
+ */
+const COLLECTIONS: readonly {
+  emoji: string;
+  label: string;
+  blurb: string;
+  href: string;
+}[] = [
+  {
+    emoji: '🍀',
+    label: 'Lucky notes',
+    blurb: 'Auspicious numbers — 786, 108',
+    href: '/browse?pattern=lucky',
+  },
+  {
+    emoji: '💎',
+    label: 'Unique notes',
+    blurb: 'Solids, radars, ladders, repeaters',
+    href: '/browse?pattern=unique',
+  },
+  {
+    emoji: '⭐',
+    label: 'Star notes',
+    blurb: 'Replacement notes, scarcer by design',
+    href: '/browse?pattern=star',
+  },
+  {
+    emoji: '🔢',
+    label: 'Low serials',
+    blurb: 'The first hundred off the press',
+    href: '/browse?pattern=low-serial',
+  },
+  {
+    emoji: '🪞',
+    label: 'Radars',
+    blurb: 'Reads the same both ways — 123321',
+    href: '/browse?pattern=radar',
+  },
+  {
+    emoji: '🎯',
+    label: 'Solids',
+    blurb: 'Every digit the same — 777777',
+    href: '/browse?pattern=solid',
+  },
 ];
 
 const STEPS: readonly { n: string; title: string; body: string }[] = [
@@ -273,7 +333,7 @@ export default async function Home({
           </a>
         </section>
 
-        {/* Occasions */}
+        {/* Occasions — all of them dates */}
         <section className="mb-24">
           <SectionHeading
             overline="Occasions"
@@ -289,6 +349,32 @@ export default async function Home({
               >
                 <span aria-hidden>{o.emoji}</span>
                 {o.label}
+              </a>
+            ))}
+          </div>
+        </section>
+
+        {/* Collections — patterns in the serial, not dates */}
+        <section className="mb-24">
+          <SectionHeading
+            overline="Collections"
+            title="Notes worth having for the number alone"
+            lead="Some serials are collectible whatever date they spell. Every serial listed here is read for these the moment it goes up."
+          />
+          <div className="grid gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line sm:grid-cols-2 lg:grid-cols-3">
+            {COLLECTIONS.map((c) => (
+              <a
+                key={c.label}
+                href={c.href}
+                className="flex items-start gap-4 bg-sand-raised p-5 transition-colors hover:bg-sand"
+              >
+                <span aria-hidden className="text-2xl">
+                  {c.emoji}
+                </span>
+                <span>
+                  <span className="block font-display text-lg text-slate">{c.label}</span>
+                  <span className="mt-1 block text-xs text-slate-dim">{c.blurb}</span>
+                </span>
               </a>
             ))}
           </div>

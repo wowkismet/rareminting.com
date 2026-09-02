@@ -31,6 +31,33 @@ const GRADES = [
   { value: 'G', label: 'G — good' },
 ] as const;
 
+/**
+ * The photograph, taken at the moment of listing.
+ *
+ * Optional, because a seller may be at their desk without the note in front of
+ * them — but offered here because the alternative is listing an item and only
+ * discovering later that nobody can see it.
+ */
+function PhotoField() {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
+        Photograph<span className="ml-2 normal-case tracking-normal">optional</span>
+      </span>
+      <input
+        type="file"
+        name="photo"
+        accept="image/jpeg,image/png,image/webp"
+        className="text-sm text-slate file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:text-cream"
+      />
+      <span className="text-xs text-slate-dim">
+        Buyers decide on the picture. Photograph it flat, in daylight, with the serial legible. You
+        can add more from your dashboard afterwards.
+      </span>
+    </label>
+  );
+}
+
 export default async function SellPage() {
   const user = await currentUser();
   if (user === null) redirect('/signin');
@@ -153,7 +180,7 @@ export default async function SellPage() {
               </p>
             </div>
 
-            <ActionForm action={createListing} submitLabel="Create listing">
+            <ActionForm action={createListing} submitLabel="Create listing" encType="multipart/form-data">
               <Field
                 label="Serial number"
                 name="serial"
@@ -181,6 +208,8 @@ export default async function SellPage() {
                 required
                 placeholder="4500"
               />
+
+              <PhotoField />
               <Field label="Anything else worth knowing" name="description" />
             </ActionForm>
 
@@ -197,7 +226,7 @@ export default async function SellPage() {
                 out anything you do not know.
               </p>
 
-              <ActionForm action={createCollectible} submitLabel="Create listing">
+              <ActionForm action={createCollectible} submitLabel="Create listing" encType="multipart/form-data">
                 <Select label="What is it" name="kind" options={ITEM_KINDS} defaultValue="coin" />
                 <Field
                   label="Title"
@@ -247,7 +276,8 @@ export default async function SellPage() {
                   hint="A standard reference lets a buyer look the type up independently."
                 />
                 <Select label="Condition" name="grade" options={GRADES} defaultValue="XF" />
-                <Field label="Anything else worth knowing" name="description" />
+                <PhotoField />
+              <Field label="Anything else worth knowing" name="description" />
               </ActionForm>
             </div>
           </>

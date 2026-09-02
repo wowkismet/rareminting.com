@@ -100,15 +100,18 @@ export function ActionForm({
   action,
   submitLabel,
   children,
+  encType,
 }: {
   action: (prev: FormState, data: FormData) => Promise<FormState>;
   submitLabel: string;
   children: React.ReactNode;
+  /** Set to multipart/form-data when the form carries a file. */
+  encType?: string;
 }) {
   const [state, formAction] = useActionState(action, NO_ERROR);
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form action={formAction} encType={encType} className="flex flex-col gap-5">
       {children}
       {state.error !== null && (
         <p

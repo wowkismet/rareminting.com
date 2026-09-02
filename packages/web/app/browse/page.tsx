@@ -18,19 +18,35 @@ export const dynamic = 'force-dynamic';
  * Distinct from the homepage, which still searches a seeded catalogue. This
  * page shows what sellers have actually published.
  */
+/** Collection names, for the heading and the empty state. */
+const COLLECTION_LABEL: Record<string, string> = {
+  lucky: 'Lucky notes',
+  unique: 'Unique notes',
+  star: 'Star notes',
+  'low-serial': 'Low serials',
+  radar: 'Radars',
+  solid: 'Solids',
+  ladder: 'Ladders',
+  repeater: 'Repeaters',
+  novelty: 'Novelty numbers',
+};
+
 export default async function BrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; pattern?: string }>;
 }) {
   const params = await searchParams;
   const user = await currentUser();
   const date = params.date;
+  const pattern = params.pattern;
 
   const path =
     date !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(date)
       ? `/v1/listings?date=${date}`
-      : '/v1/listings?limit=48';
+      : pattern !== undefined && /^[a-zA-Z_-]{1,24}$/.test(pattern)
+        ? `/v1/listings?limit=48&pattern=${encodeURIComponent(pattern)}`
+        : '/v1/listings?limit=48';
 
   const result = await api<
     { listings: ApiListing[] } & { exact?: ApiListing[]; dayMonth?: ApiListing[] }
@@ -39,6 +55,9 @@ export default async function BrowsePage({
   const exact = result.ok ? (result.data.exact ?? []) : [];
   const near = result.ok ? (result.data.dayMonth ?? []) : [];
   const all = result.ok ? (result.data.listings ?? []) : [];
+
+  const collectionLabel =
+    pattern === undefined ? null : (COLLECTION_LABEL[pattern.toLowerCase()] ?? pattern);
 
   return (
     <div>
@@ -50,7 +69,7 @@ export default async function BrowsePage({
             The Floor
           </p>
           <h1 className="mt-2 font-display text-3xl text-slate sm:text-4xl">
-            {date === undefined ? 'Notes for sale' : `Notes for ${date}`}
+            {date !== undefined ? `Notes for ${date}` : (collectionLabel ?? 'Notes for sale')}
           </h1>
         </div>
 
@@ -71,7 +90,7 @@ export default async function BrowsePage({
           >
             Find my date
           </button>
-          {date !== undefined && (
+          {(date !== undefined || collectionLabel !== null) && (
             <a href="/browse" className="text-sm text-slate-dim underline underline-offset-4">
               Show everything
             </a>
@@ -85,7 +104,14 @@ export default async function BrowsePage({
         )}
 
         {date === undefined ? (
-          <Grid listings={all} empty="No notes are listed for sale yet." />
+          <Grid
+            listings={all}
+            empty={
+              collectionLabel === null
+                ? 'No notes are listed for sale yet.'
+                : 'Nothing in this collection yet. Every serial is read for these when it is listed, so this fills as stock arrives.'
+            }
+          />
         ) : (
           <>
             <section>

@@ -572,3 +572,64 @@ describe('the listing index', () => {
     assert.equal(first?.note?.denomination, 100);
   });
 });
+
+describe('browsing by pattern', () => {
+  it('finds a lucky note and excludes an ordinary one', async () => {
+    const token = await signUp();
+    await approvedSeller(token);
+
+    // 786 is the auspicious number the engine tags as LUCKY.
+    const lucky = await createListing(token, { serial: '5AB 786786' });
+    const { listing: l1 } = (await lucky.json()) as { listing: { id: string } };
+    await request(app, 'POST', `/v1/listings/${l1.id}/publish`, { token });
+
+    const plain = await createListing(token, { serial: '5AB 483920' });
+    const { listing: l2 } = (await plain.json()) as { listing: { id: string } };
+    await request(app, 'POST', `/v1/listings/${l2.id}/publish`, { token });
+
+    const res = await request(app, 'GET', '/v1/listings?pattern=lucky');
+    const body = (await res.json()) as { total: number; listings: { id: string }[] };
+    const ids = body.listings.map((l) => l.id);
+    assert.ok(ids.includes(l1.id), 'the lucky note was not found');
+    assert.equal(ids.includes(l2.id), false, 'an ordinary serial matched a collection');
+    assert.equal(body.total, ids.length, 'the total should count the filtered set');
+  });
+
+  it('finds solids under the unique collection', async () => {
+    const token = await signUp();
+    await approvedSeller(token);
+
+    const solid = await createListing(token, { serial: '5AB 777777' });
+    const { listing } = (await solid.json()) as { listing: { id: string } };
+    await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token });
+
+    for (const collection of ['unique', 'solid', 'SOLID']) {
+      const res = await request(app, 'GET', `/v1/listings?pattern=${collection}`);
+      const body = (await res.json()) as { listings: { id: string }[] };
+      assert.ok(
+        body.listings.some((l) => l.id === listing.id),
+        `a solid was missing from ${collection}`,
+      );
+    }
+  });
+
+  it('counts only what is for sale, not drafts', async () => {
+    const token = await signUp();
+    await approvedSeller(token);
+    // Published.
+    const a = await createListing(token, { serial: '5AB 786000' });
+    const { listing: pub } = (await a.json()) as { listing: { id: string } };
+    await request(app, 'POST', `/v1/listings/${pub.id}/publish`, { token });
+    // Draft, same pattern.
+    await createListing(token, { serial: '5AB 000786' });
+
+    const res = await request(app, 'GET', '/v1/listings?pattern=lucky');
+    const body = (await res.json()) as { total: number };
+    assert.equal(body.total, 1, 'a draft was advertised as for sale');
+  });
+
+  it('rejects an unknown collection rather than silently returning everything', async () => {
+    const res = await request(app, 'GET', '/v1/listings?pattern=not-a-thing');
+    assert.equal(res.status, 400);
+  });
+});

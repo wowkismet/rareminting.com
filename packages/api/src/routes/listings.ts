@@ -42,6 +42,56 @@ const KIND_LABEL: Record<string, string> = {
 
 const OPEN_STATES = ['draft', 'pending_review', 'minted', 'reserved'] as const;
 
+/**
+ * Browsable collections, each a set of pattern codes.
+ *
+ * Named for what a buyer is actually looking for rather than for the taxonomy.
+ * Somebody wants "a lucky note"; they do not want to learn that the engine
+ * calls it LUCKY and that 786 and 108 are the auspicious numbers it knows.
+ *
+ * A bare pattern code also works, so the taxonomy stays reachable for anyone
+ * who does know it.
+ */
+const COLLECTIONS: Readonly<Record<string, readonly string[]>> = {
+  // Auspicious numbers — 786 and 108 above all.
+  lucky: ['LUCKY'],
+  // The premium patterns. What a collector means by a fancy serial.
+  unique: [
+    'SOLID',
+    'RADAR',
+    'LADDER_ASC',
+    'LADDER_DESC',
+    'LADDER_ASC_WRAP',
+    'LADDER_DESC_WRAP',
+    'REPEATER',
+    'TRIPLE_PAIRS',
+    'DOUBLE_PAIRS',
+    'BINARY',
+  ],
+  solid: ['SOLID'],
+  radar: ['RADAR'],
+  ladder: ['LADDER_ASC', 'LADDER_DESC', 'LADDER_ASC_WRAP', 'LADDER_DESC_WRAP'],
+  repeater: ['REPEATER', 'TRIPLE_PAIRS', 'DOUBLE_PAIRS'],
+  // Replacement notes, printed to substitute a spoiled one and scarcer for it.
+  star: ['STAR_SERIES'],
+  'low-serial': ['LOW_SERIAL'],
+  novelty: ['NOVELTY'],
+};
+
+const KNOWN_CODES = new Set([
+  'SOLID', 'RADAR', 'LADDER_ASC', 'LADDER_DESC', 'LADDER_ASC_WRAP', 'LADDER_DESC_WRAP',
+  'REPEATER', 'TRIPLE_PAIRS', 'DOUBLE_PAIRS', 'BINARY', 'LUCKY', 'NOVELTY', 'SEMI_FANCY',
+  'STAR_SERIES', 'ERROR_NOTE', 'LOW_SERIAL', 'HIGH_SERIAL',
+]);
+
+/** A collection name or a bare pattern code, to the codes it covers. */
+function expandPattern(input: string): string[] | null {
+  const collection = COLLECTIONS[input.toLowerCase()];
+  if (collection !== undefined) return [...collection];
+  const code = input.toUpperCase();
+  return KNOWN_CODES.has(code) ? [code] : null;
+}
+
 /** Rupees in, paise out. Money is only ever stored as an integer minor unit. */
 function toPaise(fields: Record<string, unknown>, key: string): number {
   const value = fields[key];
@@ -373,6 +423,15 @@ export function registerListingRoutes(router: Router, database: Database): void 
     const limit = Math.min(Number(ctx.url.searchParams.get('limit') ?? 24) || 24, 100);
 
     if (date === null) {
+      // Browse by what makes a serial collectible rather than by date. The
+      // engine tags every serial when it is listed, so this is an indexed
+      // lookup rather than a scan.
+      const patternParam = ctx.url.searchParams.get('pattern');
+      const codes = patternParam === null ? null : expandPattern(patternParam);
+      if (patternParam !== null && codes === null) {
+        throw badRequest('Unknown pattern.', { pattern: 'unknown' });
+      }
+
       const rows = await ctx.db.query<
         ListingRow & { thumb: string | null } & Partial<NoteRow>
       >(
@@ -384,15 +443,24 @@ export function registerListingRoutes(router: Router, database: Database): void 
            from listings l
            left join notes n on n.listing_id = l.id
           where l.state = 'minted'
+            and ($2::text[] is null or exists (
+                  select 1 from listing_pattern_tags lt
+                   where lt.listing_id = l.id and lt.tag_code = any($2::text[])))
           order by l.published_at desc nulls last
           limit $1`,
-        [limit],
+        [limit, codes],
       );
 
-      // The true number for sale, not the number on this page. The homepage
+      // The true number matching, not the number on this page. The homepage
       // states it out loud, so it has to be the real one.
       const counted = await ctx.db.query<{ total: string }>(
-        `select count(*)::text as total from listings where state = 'minted'`,
+        `select count(*)::text as total
+           from listings l
+          where l.state = 'minted'
+            and ($1::text[] is null or exists (
+                  select 1 from listing_pattern_tags lt
+                   where lt.listing_id = l.id and lt.tag_code = any($1::text[])))`,
+        [codes],
       );
 
       return json({

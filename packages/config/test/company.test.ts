@@ -81,9 +81,19 @@ describe('the operating entity', () => {
     );
   });
 
-  it('does not invent a grievance officer', () => {
-    // Required before launch, but a fabricated contact is worse than none.
-    assert.equal(COMPANY.grievanceOfficer, null);
+  it('publishes a grievance officer who can actually be reached', () => {
+    // Required of an intermediary under the IT Rules. The point of the test is
+    // not that a name exists but that what is published is contactable: an
+    // address nobody reads is the same as having no officer.
+    const officer = COMPANY.grievanceOfficer;
+    assert.notEqual(officer, null, 'a grievance officer must be published');
+    assert.ok(officer !== null);
+    assert.ok(officer.name.trim().length > 1, 'the officer needs a name');
+    assert.match(officer.email, /^[^@\s]+@[^@\s]+\.[^@\s]+$/, 'the email must be well formed');
+    assert.ok(
+      officer.email.endsWith('@rareminting.com'),
+      'the officer should be reachable on our own domain, not a personal address',
+    );
   });
 });
 

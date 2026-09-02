@@ -36,7 +36,7 @@ export interface Company {
   readonly grievanceOfficer: {
     readonly name: string;
     readonly email: string;
-    readonly phone: string;
+    readonly phone?: string;
   } | null;
   readonly supportEmail: string | null;
 }
@@ -55,8 +55,10 @@ export const COMPANY: Company = {
     postalCode: '400064',
     countryCode: 'IN',
   },
-  // Still to be appointed. Required before payments are activated.
-  grievanceOfficer: null,
+  grievanceOfficer: {
+    name: 'Raghunandan',
+    email: 'more@rareminting.com',
+  },
   supportEmail: null,
 };
 

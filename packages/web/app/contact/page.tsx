@@ -72,14 +72,20 @@ export default function ContactPage() {
           <address className="not-italic text-slate-dim">
             <span className="text-slate">{officer.name}</span>
             <br />
+            Grievance Officer, {COMPANY.legalName}
+            <br />
             <a
               href={`mailto:${officer.email}`}
               className="text-accent-deep underline underline-offset-4"
             >
               {officer.email}
             </a>
-            <br />
-            {officer.phone}
+            {officer.phone !== undefined && (
+              <>
+                <br />
+                {officer.phone}
+              </>
+            )}
           </address>
         )}
         <p className="text-sm text-slate-dim">

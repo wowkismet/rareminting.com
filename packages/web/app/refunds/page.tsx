@@ -205,9 +205,16 @@ export default function RefundsPage() {
             </p>
           ) : (
             <address className="not-italic">
-              {COMPANY.grievanceOfficer.name}
+              {COMPANY.grievanceOfficer.name}, Grievance Officer
               <br />
-              {COMPANY.grievanceOfficer.email} · {COMPANY.grievanceOfficer.phone}
+              <a
+                href={`mailto:${COMPANY.grievanceOfficer.email}`}
+                className="text-accent-deep underline underline-offset-4"
+              >
+                {COMPANY.grievanceOfficer.email}
+              </a>
+              {COMPANY.grievanceOfficer.phone !== undefined &&
+                ` · ${COMPANY.grievanceOfficer.phone}`}
             </address>
           )}
           <p className="text-slate-dim">

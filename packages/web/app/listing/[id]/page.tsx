@@ -6,6 +6,8 @@ import { NotePhotos, PhotoUpload } from '@/components/NotePhotos.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
+import { DashboardShell } from '@/components/DashboardShell.tsx';
+import { loadSellerOrNull, sellerMenu } from '@/lib/seller-dashboard.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
 
 export const dynamic = 'force-dynamic';
@@ -47,16 +49,21 @@ export default async function ListingPage({
   const note = listing.note;
   const best = listing.dates?.[0];
 
-  return (
-    <div>
-      <SiteHeader user={user} compact />
+  // The seller looking at their own item keeps the dashboard around them; a
+  // buyer gets the public page. Same content either way — only the furniture
+  // differs, because a seller menu shown to a buyer would be nonsense.
+  const dash = isOwner ? await loadSellerOrNull() : null;
 
-      <main className="mx-auto flex max-w-3xl flex-col gap-8 px-5 py-14">
+  const body = (
+    <>
+      <div className="flex flex-col gap-8">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
             {listing.state === 'minted' ? 'Minted' : listing.state}
           </p>
-          <h1 className="mt-2 font-display text-3xl text-slate">{listing.title}</h1>
+          {dash === null && (
+            <h1 className="mt-2 font-display text-3xl text-slate">{listing.title}</h1>
+          )}
         </div>
 
         <NotePhotos media={listing.media ?? []} title={listing.title} />
@@ -246,8 +253,29 @@ export default async function ListingPage({
             </button>
           </form>
         )}
-      </main>
+      </div>
+    </>
+  );
 
+  if (dash !== null) {
+    return (
+      <DashboardShell
+        user={dash.user}
+        eyebrow="The Mint"
+        title={listing.title}
+        subtitle={`Your item · ${listing.state}`}
+        sections={sellerMenu(dash.data)}
+        current="/seller/items"
+      >
+        <div className="max-w-3xl">{body}</div>
+      </DashboardShell>
+    );
+  }
+
+  return (
+    <div>
+      <SiteHeader user={user} compact />
+      <main className="mx-auto flex max-w-3xl flex-col gap-8 px-5 py-14">{body}</main>
       <SiteFooter />
     </div>
   );

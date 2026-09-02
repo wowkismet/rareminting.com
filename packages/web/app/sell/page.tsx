@@ -5,6 +5,8 @@ import { createCollectible, createListing, registerSeller } from '@/app/actions.
 import { ActionForm, Field, Select } from '@/components/Forms.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { DashboardShell } from '@/components/DashboardShell.tsx';
+import { loadSellerOrNull, sellerMenu } from '@/lib/seller-dashboard.ts';
 import { currentSeller, currentUser } from '@/lib/session.ts';
 
 export const metadata: Metadata = { title: 'Sell a note' };
@@ -64,11 +66,15 @@ export default async function SellPage() {
 
   const seller = await currentSeller();
 
-  return (
-    <div>
-      <SiteHeader user={user} compact />
+  // A registered seller keeps their dashboard furniture while listing — losing
+  // the menu the moment you start adding an item makes listing feel like a
+  // detour off the site rather than part of it. Somebody who has not
+  // registered yet has no dashboard to show, so they get the plain page.
+  const dash = seller === null ? null : await loadSellerOrNull();
 
-      <main className="mx-auto flex max-w-2xl flex-col gap-8 px-5 py-14">
+  const body = (
+    <>
+      <div className="flex flex-col gap-8">
         {seller === null ? (
           <>
             <div>
@@ -137,18 +143,6 @@ export default async function SellPage() {
           </>
         ) : (
           <>
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-                  The Mint
-                </p>
-                <h1 className="mt-2 font-display text-3xl text-slate">List a note</h1>
-              </div>
-              <p className="text-sm text-slate-dim">
-                Selling as <span className="text-slate">{seller.displayName}</span>
-              </p>
-            </div>
-
             {seller.approved ? (
               <div className="rounded-sm border border-accent-deep/50 bg-accent-deep/10 p-5">
                 <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent-deep">
@@ -282,8 +276,30 @@ export default async function SellPage() {
             </div>
           </>
         )}
-      </main>
+      </div>
+    </>
+  );
 
+  // Registered: the same shell, the same left menu, as every other seller page.
+  if (dash !== null) {
+    return (
+      <DashboardShell
+        user={dash.user}
+        eyebrow="The Mint"
+        title="List an item"
+        subtitle={`Selling as ${dash.data.seller.displayName}`}
+        sections={sellerMenu(dash.data)}
+        current="/sell"
+      >
+        <div className="max-w-2xl">{body}</div>
+      </DashboardShell>
+    );
+  }
+
+  return (
+    <div>
+      <SiteHeader user={user} compact />
+      <main className="mx-auto flex max-w-2xl flex-col gap-8 px-5 py-14">{body}</main>
       <SiteFooter />
     </div>
   );

@@ -116,3 +116,22 @@ export function sellerMenu(data: Dashboard): MenuSection[] {
     },
   ];
 }
+
+/**
+ * The dashboard, or null when the visitor is not a seller.
+ *
+ * Unlike loadSeller this never redirects, so it can be used on pages a
+ * non-seller is allowed to reach — the sell page itself most obviously, where
+ * redirecting to /sell would loop.
+ */
+export async function loadSellerOrNull(): Promise<{
+  user: ApiUser;
+  data: Dashboard;
+} | null> {
+  const user = await currentUser();
+  if (user === null) return null;
+
+  const token = await sessionToken();
+  const result = await api<Dashboard>('/v1/sellers/me/dashboard', { token });
+  return result.ok ? { user, data: result.data } : null;
+}

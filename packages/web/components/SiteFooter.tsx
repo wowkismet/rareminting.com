@@ -33,6 +33,7 @@ const SECTIONS = [
     heading: 'Company',
     links: [
       { href: '/about', label: 'About us' },
+      { href: '/how-it-works', label: 'How it works' },
       { href: '/contact', label: 'Contact & grievances' },
     ],
   },

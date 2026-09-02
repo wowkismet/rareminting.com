@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
 import { currentUser } from '@/lib/session.ts';
 
@@ -122,35 +123,7 @@ function Grid({ listings, empty }: { listings: ApiListing[]; empty: string }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {listings.map((listing) => (
-        <a
-          key={listing.id}
-          href={`/listing/${listing.id}`}
-          className="flex flex-col gap-3 rounded-sm border border-sand-line bg-sand-raised p-5 transition-colors hover:border-accent-deep/60"
-        >
-          {listing.imageUrl != null ? (
-            <img
-              src={listing.imageUrl}
-              alt={listing.title}
-              loading="lazy"
-              className="aspect-[2/1] w-full rounded-sm border border-sand-line object-cover"
-            />
-          ) : (
-            <div className="flex aspect-[2/1] w-full items-center justify-center rounded-sm border border-dashed border-sand-line text-xs text-slate-dim">
-              No photograph yet
-            </div>
-          )}
-          <p className="font-display text-lg text-slate">{listing.title}</p>
-          {listing.match !== undefined && (
-            <p className="font-mono text-xs text-accent-deep">
-              reads as {listing.match.iso ?? `${listing.match.day}/${listing.match.month}`}
-            </p>
-          )}
-          <p className="mt-auto font-display text-xl text-slate">
-            {listing.priceInr === null
-              ? '—'
-              : `₹${listing.priceInr.toLocaleString('en-IN')}`}
-          </p>
-        </a>
+        <ListingCard key={listing.id} listing={listing} />
       ))}
     </div>
   );

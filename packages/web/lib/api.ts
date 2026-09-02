@@ -109,6 +109,7 @@ export interface ApiListing {
   id: string;
   title: string;
   state: string;
+  saleMode?: string;
   priceInr: number | null;
   grade: string | null;
   publishedAt: string | null;

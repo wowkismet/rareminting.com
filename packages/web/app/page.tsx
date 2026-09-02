@@ -272,7 +272,7 @@ export default async function Home({
       {/* ---------- Light zone ---------- */}
       <main className="mx-auto max-w-6xl px-5 py-16">
         {results !== null && (
-          <section className="mb-24">
+          <section className="mb-16">
             <SectionHeading
               overline={(() => {
                 const found = results.exact.length + results.dayMonth.length;
@@ -328,7 +328,7 @@ export default async function Home({
         )}
 
         {/* How it works */}
-        <section className="mb-24">
+        <section className="mb-16">
           <SectionHeading
             overline="How it works"
             title="How Rare Minting works"
@@ -343,16 +343,10 @@ export default async function Home({
               </li>
             ))}
           </ol>
-          <a
-            href="/how-it-works"
-            className="mt-6 inline-block text-sm text-accent-deep underline underline-offset-4"
-          >
-            The longer version, including how we grade and how you are protected
-          </a>
         </section>
 
         {/* Occasions — all of them dates */}
-        <section className="mb-24">
+        <section className="mb-16">
           <SectionHeading
             overline="Occasions"
             title="For every milestone"
@@ -373,7 +367,7 @@ export default async function Home({
         </section>
 
         {/* Collections — patterns in the serial, not dates */}
-        <section className="mb-24">
+        <section className="mb-16">
           <SectionHeading
             overline="Collections"
             title="Notes worth having for the number alone"
@@ -399,7 +393,7 @@ export default async function Home({
         </section>
 
         {/* The floor */}
-        <section className="mb-24">
+        <section className="mb-16">
           <SectionHeading
             overline="The Floor"
             title={listings.length === 0 ? 'The floor is opening' : 'Recently listed'}
@@ -454,13 +448,15 @@ export default async function Home({
           <div className="grid items-center gap-10 p-8 sm:p-12 lg:grid-cols-2 lg:gap-14">
             {/* The note, and what its number turned out to mean. */}
             <figure className="flex flex-col gap-5">
+              {/* Cropped to the note's own edges, so it sits on the panel as
+                  an object rather than as a photograph of a table. */}
               <img
                 src="/note-story.webp"
                 alt="A ₹500 banknote with the serial number 8WP 040891"
                 loading="lazy"
                 width={1200}
-                height={900}
-                className="w-full rotate-[-1.2deg] rounded-sm border border-line/60 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.75)]"
+                height={537}
+                className="w-full rotate-[-1.2deg] rounded-[3px] shadow-[0_22px_50px_-16px_rgba(0,0,0,0.8)]"
               />
 
               <figcaption className="rounded-sm border border-accent/30 bg-ink/50 px-5 py-4">

@@ -127,6 +127,18 @@ function Grid({ listings, empty }: { listings: ApiListing[]; empty: string }) {
           href={`/listing/${listing.id}`}
           className="flex flex-col gap-3 rounded-sm border border-sand-line bg-sand-raised p-5 transition-colors hover:border-accent-deep/60"
         >
+          {listing.imageUrl != null ? (
+            <img
+              src={listing.imageUrl}
+              alt={listing.title}
+              loading="lazy"
+              className="aspect-[2/1] w-full rounded-sm border border-sand-line object-cover"
+            />
+          ) : (
+            <div className="flex aspect-[2/1] w-full items-center justify-center rounded-sm border border-dashed border-sand-line text-xs text-slate-dim">
+              No photograph yet
+            </div>
+          )}
           <p className="font-display text-lg text-slate">{listing.title}</p>
           {listing.match !== undefined && (
             <p className="font-mono text-xs text-accent-deep">

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { buyNow, publishListing } from '@/app/actions.ts';
+import { buyNow, publishListing, uploadPhoto } from '@/app/actions.ts';
+import { NotePhotos, PhotoUpload } from '@/components/NotePhotos.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
@@ -35,6 +36,12 @@ export default async function ListingPage({
   if (!result.ok) notFound();
 
   const listing = result.data.listing;
+  // The API only returns a draft to the seller who owns it, so seeing one is
+  // proof of ownership. For a live listing, fall back to asking.
+  const isOwner =
+    user !== null &&
+    (listing.state === 'draft' ||
+      (await api<{ seller: { id: string } }>('/v1/sellers/me', { token })).ok);
   const note = listing.note;
   const best = listing.dates?.[0];
 
@@ -49,6 +56,8 @@ export default async function ListingPage({
           </p>
           <h1 className="mt-2 font-display text-3xl text-slate">{listing.title}</h1>
         </div>
+
+        <NotePhotos media={listing.media ?? []} title={listing.title} />
 
         {/* The serial, as the hero. Dark plate on the cream page, like a
             banknote window set into the card. */}
@@ -168,6 +177,8 @@ export default async function ListingPage({
             This note is reserved for another buyer.
           </p>
         )}
+
+        {isOwner && <PhotoUpload listingId={listing.id} action={uploadPhoto} />}
 
         {listing.state === 'draft' && (
           <form action={publishListing} className="rounded-sm border border-sand-line bg-sand-raised p-5">

@@ -118,6 +118,8 @@ export interface ApiListing {
     isStar: boolean;
     serialDigits: string;
   };
+  imageUrl?: string | null;
+  media?: { id: string; kind: string; url: string }[];
   patterns?: { code: string; label: string; weight: number; detail: string | null }[];
   dates?: {
     iso: string | null;

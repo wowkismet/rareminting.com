@@ -295,16 +295,23 @@ export function registerListingRoutes(router: Router, database: Database): void 
     const limit = Math.min(Number(ctx.url.searchParams.get('limit') ?? 24) || 24, 100);
 
     if (date === null) {
-      const rows = await ctx.db.query<ListingRow>(
-        `select id, seller_id, kind, title, description, state, sale_mode,
-                price_paise, grade, published_at, created_at
-           from listings
-          where state = 'minted'
-          order by published_at desc nulls last
+      const rows = await ctx.db.query<ListingRow & { thumb: string | null }>(
+        `select l.id, l.seller_id, l.kind, l.title, l.description, l.state, l.sale_mode,
+                l.price_paise, l.grade, l.published_at, l.created_at,
+                (select m.storage_key from media m
+                  where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb
+           from listings l
+          where l.state = 'minted'
+          order by l.published_at desc nulls last
           limit $1`,
         [limit],
       );
-      return json({ listings: rows.rows.map((r) => publicListing(r, null, null, null)) });
+      return json({
+        listings: rows.rows.map((r) => ({
+          ...publicListing(r, null, null, null),
+          imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
+        })),
+      });
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -319,12 +326,15 @@ export function registerListingRoutes(router: Router, database: Database): void 
         year: number | null;
         confidence: string | number;
         era: string | null;
+        thumb: string | null;
         exact: boolean;
       }
     >(
       `select l.id, l.seller_id, l.kind, l.title, l.description, l.state, l.sale_mode,
               l.price_paise, l.grade, l.published_at, l.created_at,
               d.matched_date::text as matched_date, d.day, d.month, d.year, d.confidence, d.era,
+              (select m.storage_key from media m
+                where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb,
               (d.matched_date = $1::date) as exact
          from date_matches d
          join listings l on l.id = d.listing_id
@@ -341,6 +351,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
 
     const shape = (r: (typeof matches.rows)[number]): Record<string, unknown> => ({
       ...publicListing(r, null, null, null),
+      imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
       match: {
         iso: r.matched_date,
         day: r.day,
@@ -399,6 +410,16 @@ export function registerListingRoutes(router: Router, database: Database): void 
       [id],
     );
 
+    const mediaResult = await ctx.db.query<{
+      id: string;
+      kind: string;
+      storage_key: string;
+    }>(
+      `select id, kind, storage_key
+         from media where listing_id = $1 order by sort_order asc`,
+      [id],
+    );
+
     const dateResult = await ctx.db.query<{
       matched_date: string | null;
       day: number;
@@ -421,6 +442,11 @@ export function registerListingRoutes(router: Router, database: Database): void 
           label: t.label,
           weight: Number(t.weight),
           detail: t.detail === '' ? null : t.detail,
+        })),
+        media: mediaResult.rows.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          url: `/media/${m.storage_key}`,
         })),
         dates: dateResult.rows.map((d) => ({
           iso: d.matched_date,

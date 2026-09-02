@@ -16,6 +16,7 @@ import { registerListingRoutes } from './routes/listings.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
 import { registerMediaRoutes } from './routes/media.ts';
 import { registerOrderRoutes } from './routes/orders.ts';
+import { registerPaymentRoutes } from './routes/payments.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -33,6 +34,7 @@ export function createApp(db: Database): App {
   registerAdminRoutes(router);
   registerMediaRoutes(router);
   registerOrderRoutes(router, db);
+  registerPaymentRoutes(router, db);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {
@@ -58,6 +60,23 @@ export function createApp(db: Database): App {
 
         let cachedBody: unknown;
         let bodyRead = false;
+        let cachedText: string | null = null;
+
+        // Read once, keep the exact bytes. body() parses this, rawBody()
+        // returns it verbatim for signature checks.
+        const readText = async (): Promise<string> => {
+          if (cachedText !== null) return cachedText;
+          const declared = req.headers.get('content-length');
+          if (declared !== null && Number(declared) > MAX_BODY_BYTES) {
+            throw badRequest('Request body is too large.');
+          }
+          const text = await req.text();
+          if (text.length > MAX_BODY_BYTES) {
+            throw badRequest('Request body is too large.');
+          }
+          cachedText = text;
+          return text;
+        };
 
         const ctx: Ctx = {
           req,
@@ -71,15 +90,7 @@ export function createApp(db: Database): App {
             if (bodyRead) return cachedBody;
             bodyRead = true;
 
-            const declared = req.headers.get('content-length');
-            if (declared !== null && Number(declared) > MAX_BODY_BYTES) {
-              throw badRequest('Request body is too large.');
-            }
-
-            const text = await req.text();
-            if (text.length > MAX_BODY_BYTES) {
-              throw badRequest('Request body is too large.');
-            }
+            const text = await readText();
             if (text.trim().length === 0) {
               cachedBody = {};
               return cachedBody;
@@ -90,6 +101,9 @@ export function createApp(db: Database): App {
               throw badRequest('Request body must be valid JSON.');
             }
             return cachedBody;
+          },
+          rawBody(): Promise<string> {
+            return readText();
           },
         };
 

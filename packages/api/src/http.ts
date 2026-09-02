@@ -21,6 +21,14 @@ export interface Ctx {
   readonly userAgent: string | null;
   /** Parsed JSON body; throws a 400 if the body is not valid JSON. */
   body(): Promise<unknown>;
+  /**
+   * The body exactly as it arrived.
+   *
+   * Gateway webhooks sign the bytes they sent. Re-serialising the parsed object
+   * would reorder keys and change spacing, and the signature would never match,
+   * so signature checks must read this rather than body().
+   */
+  rawBody(): Promise<string>;
 }
 
 export type Handler = (ctx: Ctx) => Promise<Response>;

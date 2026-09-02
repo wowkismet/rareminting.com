@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
+import { PayButton } from '@/components/PayButton.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { api } from '@/lib/api.ts';
@@ -72,13 +73,43 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           </p>
         </div>
 
-        {order.state === 'payment_pending' && (
+        {order.state === 'payment_pending' && !isSeller && (
           <div className="rounded-sm border border-accent-deep/40 bg-sand-raised p-5">
-            <p className="font-display text-lg text-slate">Payment is not yet available</p>
+            <p className="font-display text-lg text-slate">Pay for this order</p>
+            <p className="mt-2 mb-5 text-sm leading-relaxed text-slate-dim">
+              This note is reserved for you and off the market. Your payment is held until it
+              reaches you and the{' '}
+              <a href="/refunds" className="text-accent-deep underline underline-offset-4">
+                inspection window
+              </a>{' '}
+              closes — the seller is not paid before then.
+            </p>
+            <PayButton
+              orderId={order.id}
+              amountInr={order.totalInr}
+              buyerName={user.fullName}
+              buyerEmail={user.email}
+            />
+          </div>
+        )}
+
+        {order.state === 'payment_pending' && isSeller && (
+          <div className="rounded-sm border border-sand-line bg-sand-raised p-5">
+            <p className="font-display text-lg text-slate">Waiting for payment</p>
             <p className="mt-2 text-sm leading-relaxed text-slate-dim">
-              This note is reserved for you and has been taken off the market. Card and UPI
-              payment goes live once the gateway account is active; until then, nothing has been
-              charged.
+              The buyer has committed to this order and the note is off the market. Do not dispatch
+              until the payment shows as received.
+            </p>
+          </div>
+        )}
+
+        {order.state === 'paid' && (
+          <div className="rounded-sm border border-accent-deep/50 bg-accent-deep/10 p-5">
+            <p className="font-display text-lg text-slate">Payment received</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-dim">
+              {isSeller
+                ? 'Payment has cleared. Dispatch the item, and your payout is released once the buyer has it and the inspection window closes.'
+                : 'Your payment has cleared and we are holding it. The seller will dispatch shortly.'}
             </p>
           </div>
         )}

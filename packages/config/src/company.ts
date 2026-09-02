@@ -57,7 +57,10 @@ export const COMPANY: Company = {
   },
   grievanceOfficer: {
     name: 'Raghunandan',
-    email: 'more@rareminting.com',
+    // A mailbox that works today. rareminting.com has no MX records yet, so
+    // an address on our own domain would bounce — and a grievance channel
+    // nobody can reach is worse than an unbranded one that works.
+    email: 'rareminting@gmail.com',
   },
   supportEmail: null,
 };

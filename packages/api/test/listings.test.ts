@@ -519,3 +519,56 @@ describe('reading a listing', () => {
     assert.equal(res.status, 404, 'a draft must not be readable by anyone else');
   });
 });
+
+describe('the listing index', () => {
+  it('reports the true total, not the size of the page', async () => {
+    const token = await signUp();
+    await approvedSeller(token);
+
+    for (let i = 0; i < 5; i += 1) {
+      const created = await createListing(token, {
+        serial: `6EF ${String(300000 + i).padStart(6, '0')}`,
+      });
+      const { listing } = (await created.json()) as { listing: { id: string } };
+      await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token });
+    }
+
+    const res = await request(app, 'GET', '/v1/listings?limit=2');
+    const body = (await res.json()) as { total: number; listings: unknown[] };
+    assert.equal(body.listings.length, 2, 'the page should honour the limit');
+    assert.equal(body.total, 5, 'the total should count everything for sale');
+  });
+
+  it('counts only what is actually for sale', async () => {
+    const token = await signUp();
+    await approvedSeller(token);
+
+    const published = await createListing(token, { serial: '6EF 400001' });
+    const { listing } = (await published.json()) as { listing: { id: string } };
+    await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token });
+
+    // A draft is not for sale and must not be advertised as stock.
+    await createListing(token, { serial: '6EF 400002' });
+
+    const res = await request(app, 'GET', '/v1/listings');
+    const body = (await res.json()) as { total: number };
+    assert.equal(body.total, 1, 'a draft was counted as being for sale');
+  });
+
+  it('carries the serial, so a card can show it without a second request', async () => {
+    const token = await signUp();
+    await approvedSeller(token);
+    const created = await createListing(token, { serial: '9AB* 150892' });
+    const { listing } = (await created.json()) as { listing: { id: string } };
+    await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token });
+
+    const res = await request(app, 'GET', '/v1/listings');
+    const body = (await res.json()) as {
+      listings: { note?: { serialDigits: string; isStar: boolean; denomination: number } }[];
+    };
+    const first = body.listings[0];
+    assert.equal(first?.note?.serialDigits, '150892');
+    assert.equal(first?.note?.isStar, true);
+    assert.equal(first?.note?.denomination, 100);
+  });
+});

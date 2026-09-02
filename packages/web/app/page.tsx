@@ -1,11 +1,20 @@
-import { CATALOGUE, tagCounts, topByRarity } from '@/lib/catalogue.ts';
-import { SUGGESTED_DATES, formatLongDate, parseIsoDate, search } from '@/lib/search.ts';
-import { NoteCard } from '@/components/NoteCard.tsx';
+import { SUGGESTED_DATES, formatLongDate, parseIsoDate } from '@/lib/search.ts';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
+import { api, type ApiListing } from '@/lib/api.ts';
 import { currentUser } from '@/lib/session.ts';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * The homepage, against the real database.
+ *
+ * It used to search a seeded catalogue of two hundred invented notes. That made
+ * a good demonstration and a bad shopfront: it advertised a stock level that
+ * did not exist, and a visitor who found their date could not buy the note,
+ * because there was no note. Everything here now comes from listings that are
+ * actually for sale and links to the page where they can be bought.
+ */
 
 /** The pitch made concrete: a real serial with its date digits picked out. */
 function HeroSerial({ prefix, digits }: { prefix: string; digits: string }) {
@@ -36,6 +45,71 @@ function SectionHeading({ overline, title }: { overline: string; title: string }
   );
 }
 
+/** A listing card. Always a link — every card here is something purchasable. */
+function ListingCard({ listing, badge }: { listing: ApiListing; badge?: string }) {
+  const note = listing.note;
+  return (
+    <a
+      href={`/listing/${listing.id}`}
+      className="flex flex-col gap-3 rounded-sm border border-sand-line bg-sand-raised p-5 transition-colors hover:border-accent-deep/60"
+    >
+      {listing.imageUrl != null ? (
+        <img
+          src={listing.imageUrl}
+          alt={listing.title}
+          loading="lazy"
+          className="aspect-[2/1] w-full rounded-sm border border-sand-line object-cover"
+        />
+      ) : (
+        <div className="flex aspect-[2/1] w-full items-center justify-center rounded-sm border border-dashed border-sand-line text-xs text-slate-dim">
+          No photograph yet
+        </div>
+      )}
+
+      {badge !== undefined && (
+        <span className="self-start rounded-full border border-accent-deep/40 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-accent-deep">
+          {badge}
+        </span>
+      )}
+
+      {note !== undefined ? (
+        <p className="font-mono text-lg tracking-[0.12em] tabular-nums text-slate">
+          {note.prefix !== null && (
+            <span className="text-slate-dim">
+              {note.prefix}
+              {note.isStar && <span className="text-ember">*</span>}{' '}
+            </span>
+          )}
+          {note.serialDigits}
+        </p>
+      ) : (
+        <p className="font-display text-lg text-slate">{listing.title}</p>
+      )}
+
+      <p className="text-xs text-slate-dim">
+        {note !== undefined && `₹${note.denomination} · `}
+        {listing.grade ?? 'ungraded'}
+      </p>
+
+      {listing.match !== undefined && (
+        <p className="font-mono text-xs text-accent-deep">
+          reads as {listing.match.iso ?? `${listing.match.day}/${listing.match.month}`}
+        </p>
+      )}
+
+      <p className="mt-auto font-display text-xl text-slate">
+        {listing.priceInr === null ? '—' : `₹${listing.priceInr.toLocaleString('en-IN')}`}
+      </p>
+    </a>
+  );
+}
+
+interface Found {
+  exact: ApiListing[];
+  dayMonth: ApiListing[];
+  iso: string;
+}
+
 export default async function Home({
   searchParams,
 }: {
@@ -44,9 +118,28 @@ export default async function Home({
   const params = await searchParams;
   const user = await currentUser();
   const target = parseIsoDate(params.date);
-  const results = target === null ? null : search(target.iso);
-  const rails = tagCounts().slice(0, 8);
-  const featured = topByRarity(3);
+
+  // Two calls: what matches the requested date, and what is on the floor.
+  const [dated, floor] = await Promise.all([
+    target === null
+      ? null
+      : api<{ exact?: ApiListing[]; dayMonth?: ApiListing[] }>(
+          `/v1/listings?date=${target.iso}`,
+        ),
+    api<{ listings: ApiListing[]; total?: number }>('/v1/listings?limit=6'),
+  ]);
+
+  const results: Found | null =
+    target === null || dated === null || !dated.ok
+      ? null
+      : {
+          exact: dated.data.exact ?? [],
+          dayMonth: dated.data.dayMonth ?? [],
+          iso: target.iso,
+        };
+
+  const listings = floor.ok ? floor.data.listings : [];
+  const total = floor.ok ? (floor.data.total ?? listings.length) : 0;
 
   return (
     <div>
@@ -61,42 +154,37 @@ export default async function Home({
             </p>
           </header>
 
-          <section className="pb-16 text-center">
-            <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent-bright">
-              The Archive
-            </p>
-            <h2 className="mx-auto mt-5 max-w-3xl text-4xl leading-[1.15] text-cream sm:text-6xl">
-              Find the note that tells your story.
-            </h2>
-
-            <HeroSerial prefix="5AB " digits="150892" />
-
-            <p className="mx-auto mt-8 max-w-xl text-sm leading-relaxed text-cream-dim">
-              Our engine reads banknote serial numbers and matches them to birth dates,
-              anniversaries and life events. Every note is a keepsake waiting to be found.
+          <section className="flex flex-col items-center pb-16 pt-12 text-center">
+            <h1 className="max-w-3xl font-display text-4xl leading-[1.1] text-cream sm:text-6xl">
+              Find the banknote that carries your date.
+            </h1>
+            <p className="mt-6 max-w-xl text-cream-dim">
+              A birthday, an anniversary, the day a company was founded. Every serial number is read
+              for the dates it can mean, so the note that matters to you is findable.
             </p>
 
-            <form method="GET" className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <HeroSerial prefix="9AB" digits="150892" />
+
+            <form action="/" method="GET" className="mt-10 flex flex-wrap justify-center gap-3">
               <label htmlFor="date" className="sr-only">
                 Your date
               </label>
               <input
                 id="date"
-                type="date"
                 name="date"
-                defaultValue={target?.iso ?? ''}
-                className="rounded-full border border-line bg-ink px-6 py-3 font-mono text-cream outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent"
+                type="date"
+                defaultValue={params.date ?? ''}
+                className="rounded-full border border-line bg-ink/50 px-5 py-2.5 font-mono text-cream outline-none focus-visible:border-accent"
               />
               <button
                 type="submit"
-                className="rounded-full bg-accent px-8 py-3 text-sm font-medium text-ink transition-colors hover:bg-accent-bright focus-visible:bg-accent-bright"
+                className="rounded-full bg-accent px-7 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-accent-bright"
               >
                 Find my date
               </button>
             </form>
 
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
-              <span className="text-cream-dim">Try:</span>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
               {SUGGESTED_DATES.map((suggestion) => (
                 <a
                   key={suggestion.iso}
@@ -112,7 +200,9 @@ export default async function Home({
 
         <div className="border-t border-line/70 bg-ink/40">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-2 px-5 py-4 font-mono text-[11px] uppercase tracking-[0.2em] text-cream-dim">
-            <span>{CATALOGUE.length} notes listed</span>
+            <span>
+              {total} {total === 1 ? 'note' : 'notes'} for sale
+            </span>
             <span>Engine-verified date matching</span>
             <span>Certificate of authenticity</span>
           </div>
@@ -125,8 +215,8 @@ export default async function Home({
           <section className="mb-20">
             <SectionHeading
               overline={(() => {
-                const total = results.exact.length + results.dayMonth.length;
-                return `${total} ${total === 1 ? 'match' : 'matches'} in ${CATALOGUE.length} notes`;
+                const found = results.exact.length + results.dayMonth.length;
+                return `${found} ${found === 1 ? 'match' : 'matches'} in ${total} for sale`;
               })()}
               title={formatLongDate(results.iso)}
             />
@@ -138,31 +228,26 @@ export default async function Home({
                   date, digit for digit.
                 </p>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  {results.exact.map((match) => (
-                    <NoteCard
-                      key={match.entry.id}
-                      entry={match.entry}
-                      interpretation={match.interpretation}
-                      badge="Exact"
-                    />
+                  {results.exact.map((listing) => (
+                    <ListingCard key={listing.id} listing={listing} badge="Exact" />
                   ))}
                 </div>
               </>
             ) : (
               <div className="rounded-sm border border-sand-line bg-sand-raised p-10 text-center">
                 <p className="font-display text-2xl text-slate">
-                  Nothing in the vault reads as {formatLongDate(results.iso)} yet.
+                  Nothing for sale reads as {formatLongDate(results.iso)} yet.
                 </p>
                 <p className="mx-auto mt-3 max-w-md text-sm text-slate-dim">
-                  Save this date and we will write to you the moment a matching note is listed.
-                  Most dates find their note within a season.
+                  New notes are listed continually. Check back, or browse everything currently on
+                  the floor.
                 </p>
-                <button
-                  type="button"
-                  className="mt-7 rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+                <a
+                  href="/browse"
+                  className="mt-7 inline-block rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
                 >
-                  Save this date
-                </button>
+                  Browse every note
+                </a>
               </div>
             )}
 
@@ -173,13 +258,8 @@ export default async function Home({
                   near misses collectors often prefer.
                 </p>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  {results.dayMonth.slice(0, 6).map((match) => (
-                    <NoteCard
-                      key={match.entry.id}
-                      entry={match.entry}
-                      interpretation={match.interpretation}
-                      badge="Near"
-                    />
+                  {results.dayMonth.slice(0, 6).map((listing) => (
+                    <ListingCard key={listing.id} listing={listing} badge="Near" />
                   ))}
                 </div>
               </div>
@@ -187,37 +267,48 @@ export default async function Home({
           </section>
         )}
 
-        {/* Category rails, counted from the real catalogue */}
-        <section className="mb-20">
-          <SectionHeading overline="The Vault" title="Browse by character" />
-          <div className="grid gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line sm:grid-cols-2 lg:grid-cols-4">
-            {rails.map((rail) => (
-              <div key={rail.code} className="bg-sand-raised p-5">
-                <p className="font-display text-lg text-slate">{rail.label}</p>
-                <p className="mt-1 font-mono text-xs text-slate-dim">
-                  {rail.count} {rail.count === 1 ? 'note' : 'notes'}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Featured */}
+        {/* What is actually on the floor right now. */}
         <section>
-          <SectionHeading overline="The Floor" title="Rarest in the vault" />
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((entry) => (
-              <NoteCard
-                key={entry.id}
-                entry={entry}
-                badge={`Rarity ${(entry.analysis.rarityScore * 100).toFixed(0)}`}
-              />
-            ))}
-          </div>
+          <SectionHeading
+            overline="The Floor"
+            title={listings.length === 0 ? 'The floor is opening' : 'Recently listed'}
+          />
+
+          {listings.length === 0 ? (
+            <div className="rounded-sm border border-sand-line bg-sand-raised p-10 text-center">
+              <p className="font-display text-2xl text-slate">No notes are for sale yet.</p>
+              <p className="mx-auto mt-3 max-w-md text-sm text-slate-dim">
+                Sellers are being verified now. If you have a note with a serial worth finding, you
+                can be among the first to list it.
+              </p>
+              <a
+                href="/sell"
+                className="mt-7 inline-block rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+              >
+                Sell a note
+              </a>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {listings.map((listing) => (
+                  <ListingCard key={listing.id} listing={listing} />
+                ))}
+              </div>
+              {total > listings.length && (
+                <a
+                  href="/browse"
+                  className="mt-8 inline-block rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
+                >
+                  Browse all {total} notes
+                </a>
+              )}
+            </>
+          )}
         </section>
       </main>
 
-      <SiteFooter noteCount={CATALOGUE.length} />
+      <SiteFooter noteCount={total} />
     </div>
   );
 }

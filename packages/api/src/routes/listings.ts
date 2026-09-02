@@ -69,6 +69,24 @@ interface NoteRow {
   digit_count: number;
 }
 
+/**
+ * The note half of a joined row, or null when the join found nothing.
+ *
+ * A listing that is not a banknote has no row in `notes`, and a left join
+ * fills its columns with nulls rather than dropping the listing.
+ */
+function noteOf(row: Partial<NoteRow>): NoteRow | null {
+  if (row.denomination == null || row.serial_digits == null) return null;
+  return {
+    denomination: row.denomination,
+    series: row.series ?? '',
+    prefix: row.prefix ?? null,
+    is_star: row.is_star ?? false,
+    serial_digits: row.serial_digits,
+    digit_count: row.digit_count ?? row.serial_digits.length,
+  };
+}
+
 function paiseToNumber(value: string | number | null): number | null {
   if (value === null) return null;
   return typeof value === 'number' ? value : Number(value);
@@ -320,20 +338,32 @@ export function registerListingRoutes(router: Router, database: Database): void 
     const limit = Math.min(Number(ctx.url.searchParams.get('limit') ?? 24) || 24, 100);
 
     if (date === null) {
-      const rows = await ctx.db.query<ListingRow & { thumb: string | null }>(
+      const rows = await ctx.db.query<
+        ListingRow & { thumb: string | null } & Partial<NoteRow>
+      >(
         `select l.id, l.seller_id, l.kind, l.title, l.description, l.state, l.sale_mode,
                 l.price_paise, l.grade, l.published_at, l.created_at,
+                n.denomination, n.series, n.prefix, n.is_star, n.serial_digits, n.digit_count,
                 (select m.storage_key from media m
                   where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb
            from listings l
+           left join notes n on n.listing_id = l.id
           where l.state = 'minted'
           order by l.published_at desc nulls last
           limit $1`,
         [limit],
       );
+
+      // The true number for sale, not the number on this page. The homepage
+      // states it out loud, so it has to be the real one.
+      const counted = await ctx.db.query<{ total: string }>(
+        `select count(*)::text as total from listings where state = 'minted'`,
+      );
+
       return json({
+        total: Number(counted.rows[0]?.total ?? 0),
         listings: rows.rows.map((r) => ({
-          ...publicListing(r, null, null, null),
+          ...publicListing(r, noteOf(r), null, null),
           imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
         })),
       });

@@ -62,10 +62,19 @@ interface Grammar {
  */
 const GRAMMARS: readonly Grammar[] = [
   {
-    // 9AB* 150892 — MG / MG New Series. Optional inset letter, optional space
-    // inside the six digits (`150 892` is common on dealer sheets).
+    // 9AB* 150892 or 03L 190609 — MG / MG New Series.
+    //
+    // The three-character prefix comes in both shapes: one numeral then two
+    // letters, and two numerals then one letter. Both are in circulation, and
+    // accepting only the first made a great many real notes unreadable.
+    //
+    // Optional inset letter, optional space inside the six digits (`150 892`
+    // is common on dealer sheets).
     format: 'IN_MG_NEW',
-    build: (d) => new RegExp(`^(?:([A-Z])\\s+)?(\\d[A-Z]{2})(\\*?)[\\s-]*(${d}{3})\\s?(${d}{3})$`),
+    build: (d) =>
+      new RegExp(
+        `^(?:([A-Z])\\s+)?(\\d[A-Z]{2}|\\d{2}[A-Z])(\\*?)[\\s-]*(${d}{3})\\s?(${d}{3})$`,
+      ),
   },
   {
     // A/1 123456 — older fractional prefixes.
@@ -169,8 +178,12 @@ function tryGrammars(
     let prefixNumeral: string | null = null;
     let prefixLetters: string | null = null;
     if (grammar.format === 'IN_MG_NEW' && prefix !== null) {
-      prefixNumeral = prefix.slice(0, 1);
-      prefixLetters = prefix.slice(1);
+      // Split where the digits stop rather than at a fixed position: the
+      // numeral part is one or two characters depending on the prefix shape,
+      // so slicing at index 1 would read "03L" as numeral "0", letters "3L".
+      const split = /^(\d+)([A-Z]+)$/.exec(prefix);
+      prefixNumeral = split?.[1] ?? null;
+      prefixLetters = split?.[2] ?? null;
     }
 
     return {

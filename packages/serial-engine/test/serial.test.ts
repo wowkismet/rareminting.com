@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeSerialInput, parseSerial, serialRegistryKey } from '../src/index.ts';
+import { analyzeSerial, normalizeSerialInput, parseSerial, serialRegistryKey } from '../src/index.ts';
 import type { ParsedSerial } from '../src/index.ts';
 
 function expectOk(raw: string, options?: Parameters<typeof parseSerial>[1]): ParsedSerial {
@@ -188,5 +188,51 @@ describe('serialRegistryKey', () => {
       serialRegistryKey(expectOk('9AB 150892'), 100, 'MG New Series'),
       serialRegistryKey(expectOk('  9ab150892  '), 100, 'mg new series'),
     );
+  });
+});
+
+describe('both real prefix shapes', () => {
+  // A prefix is three characters, but in two shapes that are both in
+  // circulation. Only the first was accepted, which made a great many real
+  // notes unreadable — 03L 190609 among them.
+  it('reads two numerals followed by one letter', () => {
+    const serial = expectOk('03L 190609');
+    assert.equal(serial.prefix, '03L');
+    assert.equal(serial.prefixNumeral, '03', 'the numeral part is both digits');
+    assert.equal(serial.prefixLetters, 'L');
+    assert.equal(serial.serialDigits, '190609');
+    assert.equal(serial.format, 'IN_MG_NEW');
+  });
+
+  it('still reads one numeral followed by two letters', () => {
+    const serial = expectOk('9AB 150892');
+    assert.equal(serial.prefixNumeral, '9');
+    assert.equal(serial.prefixLetters, 'AB');
+  });
+
+  it('reads both shapes with no space, a star, and an inset letter', () => {
+    for (const raw of ['03L190609', '03L* 190609', 'E 03L 190609', '12A 190609']) {
+      const serial = expectOk(raw);
+      assert.equal(serial.serialDigits, '190609');
+      assert.equal(serial.format, 'IN_MG_NEW');
+    }
+  });
+
+  it('reads the dates a two-numeral prefix carries', () => {
+    // 190609 reads as 19 June 2009.
+    const result = analyzeSerial('03L 190609');
+    assert.ok(result !== null);
+    const top = result.dates[0];
+    assert.equal(top?.iso, '2009-06-19');
+  });
+
+  it('does not invent a third prefix shape', () => {
+    // Three numerals, or three letters, is not a prefix this series uses.
+    for (const raw of ['123 190609', 'ABC 190609']) {
+      const result = parseSerial(raw);
+      // These may still parse under a looser grammar, but never as MG New.
+      const format = result.ok ? result.serial.format : null;
+      assert.notEqual(format, 'IN_MG_NEW', raw + ' matched IN_MG_NEW');
+    }
   });
 });

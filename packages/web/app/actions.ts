@@ -156,6 +156,48 @@ async function attachPhoto(token: string, listingId: string, data: FormData): Pr
   }).catch(() => undefined);
 }
 
+
+/**
+ * Put a freshly created listing straight under the hammer.
+ *
+ * The API creates a listing and starts an auction in two steps, because a
+ * listing exists before anyone decides how to sell it. A seller filling in one
+ * form should not have to know that, so this runs the second step for them.
+ *
+ * A failure is reported rather than swallowed, unlike the photograph: the
+ * seller asked for an auction and getting a fixed-price draft instead is not
+ * what they asked for, so they need to be told and can convert it from the
+ * dashboard.
+ */
+async function startAuctionFor(
+  token: string,
+  listingId: string,
+  data: FormData,
+): Promise<string | null> {
+  const startingInr = Number(text(data, 'startingInr'));
+  if (!Number.isFinite(startingInr) || startingInr <= 0) {
+    return 'Set a starting price for the auction.';
+  }
+
+  const reserveRaw = text(data, 'reserveInr');
+  const days = Number(text(data, 'days'));
+  const runFor = Number.isFinite(days) && days > 0 ? days : 7;
+
+  const result = await api(`/v1/listings/${listingId}/auction`, {
+    method: 'POST',
+    token,
+    body: {
+      startingInr,
+      endsAt: new Date(Date.now() + runFor * 86400000).toISOString(),
+      ...(reserveRaw === '' || !Number.isFinite(Number(reserveRaw))
+        ? {}
+        : { reserveInr: Number(reserveRaw) }),
+    },
+  });
+
+  return result.ok ? null : result.error.message;
+}
+
 export async function createListing(_prev: FormState, data: FormData): Promise<FormState> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');
@@ -193,11 +235,24 @@ export async function createListing(_prev: FormState, data: FormData): Promise<F
     return { error: result.error.message, field: field ?? null };
   }
 
-  await attachPhoto(token, result.data.listing.id, data);
+  const listingId = result.data.listing.id;
+  await attachPhoto(token, listingId, data);
+
+  if (text(data, 'saleMode') === 'auction') {
+    const failure = await startAuctionFor(token, listingId, data);
+    if (failure !== null) {
+      // The listing exists; only the auction failed. Say exactly that, so the
+      // seller does not create a second listing thinking the first was lost.
+      return {
+        error: `Your listing was created, but the auction could not start: ${failure} You can start it from your dashboard.`,
+      };
+    }
+    revalidatePath('/auctions');
+  }
 
   revalidatePath('/account');
   revalidatePath('/seller');
-  redirect(`/listing/${result.data.listing.id}`);
+  redirect(`/listing/${listingId}`);
 }
 
 export async function publishListing(data: FormData): Promise<void> {
@@ -484,10 +539,21 @@ export async function createCollectible(
     return { error: result.error.message, field: field ?? null };
   }
 
-  await attachPhoto(token, result.data.listing.id, data);
+  const listingId = result.data.listing.id;
+  await attachPhoto(token, listingId, data);
+
+  if (text(data, 'saleMode') === 'auction') {
+    const failure = await startAuctionFor(token, listingId, data);
+    if (failure !== null) {
+      return {
+        error: `Your listing was created, but the auction could not start: ${failure} You can start it from your dashboard.`,
+      };
+    }
+    revalidatePath('/auctions');
+  }
 
   revalidatePath('/seller');
-  redirect(`/listing/${result.data.listing.id}`);
+  redirect(`/listing/${listingId}`);
 }
 
 /* ---------------- auctions ---------------- */

@@ -40,6 +40,65 @@ const GRADES = [
  * them — but offered here because the alternative is listing an item and only
  * discovering later that nobody can see it.
  */
+/**
+ * How the item is to be sold.
+ *
+ * Both sets of fields are on the page at once rather than swapped by script,
+ * so the form works before hydration and on a phone with the connection cut.
+ * The hints say which fields apply to which choice; the server ignores the
+ * auction fields entirely when a fixed price is chosen.
+ */
+function SaleModeFields({ suggestedStart }: { suggestedStart: string }) {
+  return (
+    <>
+      <Select
+        label="How to sell it"
+        name="saleMode"
+        defaultValue="fixed"
+        options={[
+          { value: 'fixed', label: 'Fixed price — sell at your asking price' },
+          { value: 'auction', label: 'Auction — let bidders decide' },
+        ]}
+      />
+
+      <div className="rounded-sm border border-sand-line bg-sand p-5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent-deep">
+          Auction only
+        </p>
+        <p className="mt-2 mb-5 text-xs leading-relaxed text-slate-dim">
+          Ignored if you chose a fixed price. Bidders name the most they will pay and we bid for
+          them in small steps, so a lot often closes below the top bidder&rsquo;s ceiling — a low
+          start attracts more of them, and the reserve is what protects you.
+        </p>
+
+        <div className="flex flex-col gap-5">
+          <Field
+            label="Base price — where bidding opens"
+            name="startingInr"
+            type="number"
+            placeholder={suggestedStart}
+            hint="Required for an auction."
+          />
+          <Field
+            label="Reserve in rupees"
+            name="reserveInr"
+            type="number"
+            placeholder="Leave blank for no reserve"
+            hint="Below this it does not sell. Bidders are told only whether it has been met, never the figure."
+          />
+          <Field
+            label="Run for how many days"
+            name="days"
+            type="number"
+            defaultValue="7"
+            hint="1 to 30. A bid in the final two minutes extends the close."
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function PhotoField() {
   return (
     <label className="flex flex-col gap-1.5">
@@ -203,6 +262,7 @@ export default async function SellPage() {
                 placeholder="4500"
               />
 
+              <SaleModeFields suggestedStart="1000" />
               <PhotoField />
               <Field label="Anything else worth knowing" name="description" />
             </ActionForm>
@@ -270,7 +330,8 @@ export default async function SellPage() {
                   hint="A standard reference lets a buyer look the type up independently."
                 />
                 <Select label="Condition" name="grade" options={GRADES} defaultValue="XF" />
-                <PhotoField />
+                <SaleModeFields suggestedStart="1000" />
+              <PhotoField />
               <Field label="Anything else worth knowing" name="description" />
               </ActionForm>
             </div>

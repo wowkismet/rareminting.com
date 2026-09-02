@@ -146,7 +146,9 @@ export default async function Home({
       <SiteHeader user={user} />
 
       {/* ---------- Dark zone: hero ---------- */}
-      <div className="guilloche bg-primary">
+      <div className="note-field guilloche">
+        <div aria-hidden className="note-field-image" />
+        <div aria-hidden className="note-field-fade" />
         <div className="mx-auto max-w-6xl px-5">
           <header className="flex flex-col items-center gap-3 pt-6">
             <p className="font-display text-sm italic text-cream-dim">

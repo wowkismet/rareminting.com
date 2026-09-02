@@ -1,11 +1,8 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 
-import { publishListing } from '@/app/actions.ts';
-import { SiteHeader } from '@/components/SiteHeader.tsx';
-import { SiteFooter } from '@/components/SiteFooter.tsx';
-import { api } from '@/lib/api.ts';
-import { currentUser, sessionToken } from '@/lib/session.ts';
+import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
+import { ItemRow } from '@/components/ItemRow.tsx';
+import { loadSeller, rupees, sellerMenu } from '@/lib/seller-dashboard.ts';
 
 export const metadata: Metadata = { title: 'Seller dashboard' };
 export const dynamic = 'force-dynamic';
@@ -17,119 +14,22 @@ export const dynamic = 'force-dynamic';
  * does not fan out into a waterfall on the view a seller opens most.
  */
 
-interface Dashboard {
-  seller: { displayName: string; kycState: string; approved: boolean };
-  stats: {
-    listings: {
-      total: number;
-      draft: number;
-      inReview: number;
-      live: number;
-      reserved: number;
-      sold: number;
-      withdrawn: number;
-    };
-    byKind: { notes: number; coins: number; other: number };
-    views: number;
-    sales: {
-      orders: number;
-      completed: number;
-      awaitingPayment: number;
-      awaitingDispatch: number;
-      grossInr: number;
-      payoutInr: number;
-      committedInr: number;
-    };
-    auctions: { live: number; scheduled: number; ended: number; bids: number };
-  };
-  listings: {
-    id: string;
-    title: string;
-    state: string;
-    kind: string;
-    priceInr: number | null;
-    grade: string | null;
-    views: number;
-    photoCount: number;
-    imageUrl: string | null;
-    serialDigits: string | null;
-    denomination: number | null;
-    createdAt: string;
-  }[];
-}
-
-const STATE_LABEL: Record<string, string> = {
-  draft: 'Draft',
-  pending_review: 'In review',
-  minted: 'Live',
-  reserved: 'Reserved',
-  struck: 'Sold',
-  withdrawn: 'Withdrawn',
-  rejected: 'Rejected',
-};
-
-const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
-
-function Tile({
-  label,
-  value,
-  hint,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  accent?: boolean;
-}) {
-  return (
-    <div className="rounded-sm border border-sand-line bg-sand-raised p-4">
-      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">{label}</p>
-      <p
-        className={`mt-2 font-display text-3xl tabular-nums ${accent ? 'text-accent-deep' : 'text-slate'}`}
-      >
-        {value}
-      </p>
-      {hint !== undefined && <p className="mt-1 text-xs text-slate-dim">{hint}</p>}
-    </div>
-  );
-}
-
 export default async function SellerDashboardPage() {
-  const user = await currentUser();
-  if (user === null) redirect('/signin');
-
-  const token = await sessionToken();
-  const result = await api<Dashboard>('/v1/sellers/me/dashboard', { token });
-
-  // Not a seller yet — send them to the one page that can fix that.
-  if (!result.ok) redirect('/sell');
-
-  const { seller, stats, listings } = result.data;
+  const { user, data } = await loadSeller();
+  const { seller, stats, listings } = data;
   const needsPhotos = listings.filter((l) => l.photoCount === 0);
 
   return (
-    <div>
-      <SiteHeader user={user} compact />
-
-      <main className="mx-auto flex max-w-5xl flex-col gap-10 px-5 py-14">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-              The Mint
-            </p>
-            <h1 className="mt-2 font-display text-3xl text-slate">Seller dashboard</h1>
-            <p className="mt-2 text-sm text-slate-dim">
-              Selling as <span className="text-slate">{seller.displayName}</span>
-            </p>
-          </div>
-          <a
-            href="/sell"
-            className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-secondary"
-          >
-            List something new
-          </a>
-        </div>
-
+    <DashboardShell
+      user={user}
+      eyebrow="The Mint"
+      title="Seller dashboard"
+      subtitle={`Selling as ${seller.displayName}`}
+      sections={sellerMenu(data)}
+      current="/seller"
+      action={{ href: '/sell', label: 'List something new' }}
+    >
+      <div className="flex flex-col gap-10">
         {!seller.approved && (
           <div className="rounded-sm border border-accent-deep/40 bg-sand-raised p-5">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent-deep">
@@ -219,87 +119,28 @@ export default async function SellerDashboardPage() {
         )}
 
         <section>
-          <h2 className="mb-4 font-display text-xl text-slate">Your items</h2>
+          <div className="mb-4 flex items-baseline justify-between gap-4">
+            <h2 className="font-display text-xl text-slate">Recent items</h2>
+            {listings.length > 5 && (
+              <a href="/seller/items" className="text-sm text-accent-deep underline underline-offset-4">
+                See all {listings.length}
+              </a>
+            )}
+          </div>
 
           {listings.length === 0 ? (
-            <div className="rounded-sm border border-sand-line bg-sand-raised p-6">
-              <p className="text-sm text-slate-dim">
-                Nothing listed yet. Add your first item and it appears here with its photographs,
-                views and status.
-              </p>
-              <a
-                href="/sell"
-                className="mt-4 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-secondary"
-              >
-                List your first item
-              </a>
-            </div>
+            <Empty action={{ href: '/sell', label: 'List your first item' }}>
+              Nothing listed yet. Your items appear here with their photographs, views and status.
+            </Empty>
           ) : (
             <ul className="flex flex-col gap-3">
-              {listings.map((l) => (
-                <li
-                  key={l.id}
-                  className="flex flex-wrap items-center gap-4 rounded-sm border border-sand-line bg-sand-raised p-4"
-                >
-                  {l.imageUrl !== null ? (
-                    <img
-                      src={l.imageUrl}
-                      alt={l.title}
-                      className="h-16 w-24 shrink-0 rounded-sm border border-sand-line object-cover"
-                    />
-                  ) : (
-                    <a
-                      href={`/listing/${l.id}`}
-                      className="flex h-16 w-24 shrink-0 items-center justify-center rounded-sm border border-dashed border-accent-deep/50 text-center text-[10px] leading-tight text-accent-deep"
-                    >
-                      Add a
-                      <br />
-                      photo
-                    </a>
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <a
-                      href={`/listing/${l.id}`}
-                      className="font-mono text-sm text-slate underline-offset-4 hover:underline"
-                    >
-                      {l.serialDigits ?? l.title}
-                    </a>
-                    <p className="mt-1 text-xs text-slate-dim">
-                      {l.denomination !== null && `₹${l.denomination} · `}
-                      {l.grade ?? 'ungraded'}
-                      {l.priceInr !== null && ` · ${rupees(l.priceInr)}`}
-                      {' · '}
-                      {l.views} view{l.views === 1 ? '' : 's'}
-                      {' · '}
-                      {l.photoCount} photo{l.photoCount === 1 ? '' : 's'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-full border border-sand-line px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-dim">
-                      {STATE_LABEL[l.state] ?? l.state}
-                    </span>
-                    {l.state === 'draft' && seller.approved && (
-                      <form action={publishListing}>
-                        <input type="hidden" name="id" value={l.id} />
-                        <button
-                          type="submit"
-                          className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-cream transition-colors hover:bg-secondary"
-                        >
-                          Publish
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </li>
+              {listings.slice(0, 5).map((l) => (
+                <ItemRow key={l.id} listing={l} canPublish={seller.approved} />
               ))}
             </ul>
           )}
         </section>
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

@@ -106,3 +106,48 @@
     animation: none;
   }
 }
+
+/* The banknote field.
+ *
+ * A macro photograph of an Indian note, laid under the hero and pulled into
+ * the brand green. `luminosity` keeps only the light and shade of the
+ * engraving and takes its colour from the green beneath, so the note's pink
+ * and orange never appear — the texture survives, the palette does not.
+ *
+ * Kept dark deliberately: cream text sits on top of this, and the photograph
+ * has a bright unprinted margin that would otherwise eat the contrast.
+ */
+@utility note-field {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--color-primary);
+}
+
+@utility note-field-image {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: url('/note-texture.webp');
+  background-size: cover;
+  background-position: 28% 42%;
+  background-repeat: no-repeat;
+  filter: grayscale(1) contrast(1.3) brightness(0.42);
+  mix-blend-mode: luminosity;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Below the fold of the hero the texture fades out, so the join with the
+   cream body is a gradient rather than a hard edge. */
+@utility note-field-fade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-ink) 55%, transparent) 0%,
+    color-mix(in srgb, var(--color-ink) 20%, transparent) 45%,
+    color-mix(in srgb, var(--color-primary) 85%, transparent) 100%
+  );
+  pointer-events: none;
+}

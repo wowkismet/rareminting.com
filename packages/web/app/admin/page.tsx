@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { setKycState, moderateListing } from '@/app/actions.ts';
-import { SiteHeader } from '@/components/SiteHeader.tsx';
-import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { DashboardShell, type MenuSection } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
 
@@ -79,17 +78,39 @@ export default async function AdminPage() {
   const listings = listingsResult.ok ? listingsResult.data.listings : [];
   const o = overview.data;
 
-  return (
-    <div>
-      <SiteHeader user={user} compact />
+  const sections: MenuSection[] = [
+    {
+      title: 'Review',
+      items: [
+        { href: '/admin', label: 'Overview' },
+        { href: '/admin#sellers', label: 'Sellers', badge: o.kycPending },
+        { href: '/admin#listings', label: 'Listings' },
+      ],
+    },
+    {
+      title: 'Site',
+      items: [
+        { href: '/browse', label: 'The floor' },
+        { href: '/seller', label: 'Seller view' },
+        { href: '/account', label: 'Buyer view' },
+      ],
+    },
+  ];
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-12">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-            Staff only
-          </p>
-          <h1 className="mt-2 font-display text-3xl text-slate">Admin</h1>
-        </div>
+  return (
+    <DashboardShell
+      user={user}
+      eyebrow="Staff only"
+      title="Admin"
+      subtitle={
+        o.kycPending === 0
+          ? 'Nothing waiting on a decision'
+          : `${o.kycPending} seller${o.kycPending === 1 ? '' : 's'} waiting on a decision`
+      }
+      sections={sections}
+      current="/admin"
+    >
+      <div className="flex flex-col gap-10">
 
         <section className="grid gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Accounts" value={o.users} />
@@ -100,7 +121,7 @@ export default async function AdminPage() {
           <Stat label="Open disputes" value={o.disputesOpen} alert />
         </section>
 
-        <section>
+        <section id="sellers" className="scroll-mt-6">
           <h2 className="mb-4 font-display text-xl text-slate">Sellers</h2>
           {sellers.length === 0 ? (
             <p className="rounded-sm border border-sand-line bg-sand-raised p-6 text-sm text-slate-dim">
@@ -199,7 +220,7 @@ export default async function AdminPage() {
           )}
         </section>
 
-        <section>
+        <section id="listings" className="scroll-mt-6">
           <h2 className="mb-4 font-display text-xl text-slate">Listings</h2>
           {listings.length === 0 ? (
             <p className="rounded-sm border border-sand-line bg-sand-raised p-6 text-sm text-slate-dim">
@@ -256,9 +277,7 @@ export default async function AdminPage() {
             </div>
           )}
         </section>
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

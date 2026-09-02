@@ -82,6 +82,9 @@ function publicListing(
 ): Record<string, unknown> {
   return {
     id: listing.id,
+    // So a client can tell whose listing this is without guessing. A seller id
+    // is not a secret — the seller's name is on the page.
+    sellerId: listing.seller_id,
     kind: listing.kind,
     title: listing.title,
     description: listing.description,
@@ -251,9 +254,28 @@ export function registerListingRoutes(router: Router, database: Database): void 
   /** GET /v1/listings/:id */
   router.add('GET', '/v1/listings/:id', async (ctx) => {
     const id = ctx.params['id'] ?? '';
-    const listing = await loadListing(ctx, id);
-    if (listing === null) throw notFound('No such listing.');
-    return json(listing);
+    const loaded = await loadListing(ctx, id);
+    if (loaded === null) throw notFound('No such listing.');
+
+    // Count the view, but only a real one: a live listing, seen by somebody
+    // other than the seller. Counting the seller's own visits would turn the
+    // number into a measure of how often they refreshed their own page.
+    const shown = loaded.listing as { state: string; sellerId: string };
+    if (shown.state === 'minted') {
+      const viewerSeller =
+        ctx.session === null
+          ? null
+          : one(
+              await ctx.db.query<{ id: string }>(`select id from sellers where user_id = $1`, [
+                ctx.session.userId,
+              ]),
+            );
+      if (viewerSeller?.id !== shown.sellerId) {
+        await ctx.db.query(`update listings set view_count = view_count + 1 where id = $1`, [id]);
+      }
+    }
+
+    return json(loaded);
   });
 
   /** POST /v1/listings/:id/publish — draft → minted. */

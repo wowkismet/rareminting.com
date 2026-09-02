@@ -36,12 +36,14 @@ export default async function ListingPage({
   if (!result.ok) notFound();
 
   const listing = result.data.listing;
-  // The API only returns a draft to the seller who owns it, so seeing one is
-  // proof of ownership. For a live listing, fall back to asking.
+
+  // Compare seller ids. The previous check asked only "is this person a
+  // seller?", which was true for every seller on the site — so everyone saw an
+  // upload form on everyone else's listing. The API refused those uploads, but
+  // the page was still telling people something untrue.
+  const me = user === null ? null : await api<{ seller: { id: string } }>('/v1/sellers/me', { token });
   const isOwner =
-    user !== null &&
-    (listing.state === 'draft' ||
-      (await api<{ seller: { id: string } }>('/v1/sellers/me', { token })).ok);
+    me !== null && me.ok && listing.sellerId !== undefined && me.data.seller.id === listing.sellerId;
   const note = listing.note;
   const best = listing.dates?.[0];
 
@@ -58,6 +60,14 @@ export default async function ListingPage({
         </div>
 
         <NotePhotos media={listing.media ?? []} title={listing.title} />
+
+        {/* A listing with no picture does not sell, so for its owner the
+            uploader belongs at the top of the page rather than beneath the
+            fold. Once there is a photograph it moves back down, out of the
+            way of the thing the seller came to look at. */}
+        {isOwner && (listing.media ?? []).length === 0 && (
+          <PhotoUpload listingId={listing.id} action={uploadPhoto} />
+        )}
 
         {/* The serial, as the hero. Dark plate on the cream page, like a
             banknote window set into the card. */}
@@ -178,7 +188,9 @@ export default async function ListingPage({
           </p>
         )}
 
-        {isOwner && <PhotoUpload listingId={listing.id} action={uploadPhoto} />}
+        {isOwner && (listing.media ?? []).length > 0 && (
+          <PhotoUpload listingId={listing.id} action={uploadPhoto} />
+        )}
 
         {listing.state === 'draft' && (
           <form action={publishListing} className="rounded-sm border border-sand-line bg-sand-raised p-5">

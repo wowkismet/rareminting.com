@@ -317,4 +317,157 @@ export function registerSellerRoutes(router: Router, database: Database): void {
     const seller = await requireSeller(ctx);
     return json({ seller: publicSeller(seller) });
   });
+
+  /**
+   * GET /v1/sellers/me/dashboard — everything the seller's own page shows.
+   *
+   * One round trip rather than six, because the dashboard is the page a seller
+   * lands on and it should not need a waterfall of requests to draw itself.
+   *
+   * Money is reported two ways on purpose. Gross is what buyers paid; payout is
+   * what actually reaches the seller once commission, GST on that commission
+   * and TDS come out. Showing only the gross would overstate their earnings.
+   */
+  router.add('GET', '/v1/sellers/me/dashboard', async (ctx) => {
+    const seller = await requireSeller(ctx);
+
+    const counts = await ctx.db.query<Record<string, string>>(
+      `select
+         count(*)::text                                                as total,
+         count(*) filter (where state = 'draft')::text                 as draft,
+         count(*) filter (where state = 'pending_review')::text        as in_review,
+         count(*) filter (where state = 'minted')::text                as live,
+         count(*) filter (where state = 'reserved')::text              as reserved,
+         count(*) filter (where state = 'struck')::text                as sold,
+         count(*) filter (where state = 'withdrawn')::text             as withdrawn,
+         count(*) filter (where kind = 'banknote')::text               as notes,
+         count(*) filter (where kind = 'coin')::text                   as coins,
+         count(*) filter (where kind not in ('banknote','coin'))::text as other,
+         coalesce(sum(view_count), 0)::text                            as views
+       from listings where seller_id = $1`,
+      [seller.id],
+    );
+
+    // Orders and money are counted differently on purpose. An order exists the
+    // moment a buyer commits; the money is only real once payment clears. With
+    // no payment gateway live yet every order sits at payment_pending, so
+    // folding the two together would either show a permanent zero or claim
+    // earnings that have not arrived.
+    const PAID = `state in ('paid','packed','shipped','delivered','inspection','completed','disputed')`;
+    const sales = await ctx.db.query<Record<string, string>>(
+      `select
+         count(*)::text                                          as orders,
+         count(*) filter (where state in ('created','payment_pending'))::text
+                                                                 as awaiting_payment,
+         count(*) filter (where state in ('paid','packed'))::text as awaiting_dispatch,
+         count(*) filter (where state = 'completed')::text        as completed,
+         coalesce(sum(subtotal_paise) filter (where ${PAID}), 0)::text as gross_paise,
+         coalesce(sum(subtotal_paise - commission_paise
+                      - gst_on_commission_paise - tds_paise)
+                  filter (where ${PAID}), 0)::text                as payout_paise,
+         coalesce(sum(subtotal_paise), 0)::text                   as committed_paise
+       from orders
+      where seller_id = $1 and state not in ('cancelled','refunded')`,
+      [seller.id],
+    );
+
+    const auctions = await ctx.db.query<Record<string, string>>(
+      `select
+         count(*) filter (where a.state = 'live')::text      as live,
+         count(*) filter (where a.state = 'scheduled')::text as scheduled,
+         count(*) filter (where a.state = 'ended')::text     as ended,
+         coalesce(sum(a.bid_count), 0)::text                 as bids
+       from auctions a
+       join listings l on l.id = a.listing_id
+      where l.seller_id = $1`,
+      [seller.id],
+    );
+
+    // The listings themselves, newest first, with the two things a seller
+    // acts on: whether it has a photograph, and how many people have looked.
+    const rows = await ctx.db.query<{
+      id: string;
+      title: string;
+      state: string;
+      kind: string;
+      price_paise: string | null;
+      grade: string | null;
+      view_count: number;
+      photo_count: string;
+      thumb: string | null;
+      serial_digits: string | null;
+      denomination: number | null;
+      created_at: string;
+    }>(
+      `select l.id, l.title, l.state, l.kind, l.price_paise::text as price_paise, l.grade,
+              l.view_count,
+              (select count(*) from media m where m.listing_id = l.id)::text as photo_count,
+              (select m.storage_key from media m
+                where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb,
+              n.serial_digits, n.denomination,
+              l.created_at::text as created_at
+         from listings l
+         left join notes n on n.listing_id = l.id
+        where l.seller_id = $1
+        order by l.created_at desc
+        limit 200`,
+      [seller.id],
+    );
+
+    const c = counts.rows[0] ?? {};
+    const s = sales.rows[0] ?? {};
+    const a = auctions.rows[0] ?? {};
+    const n = (source: Record<string, string>, key: string): number => Number(source[key] ?? 0);
+    const rupees = (source: Record<string, string>, key: string): number =>
+      Number(source[key] ?? 0) / 100;
+
+    return json({
+      seller: publicSeller(seller),
+      stats: {
+        listings: {
+          total: n(c, 'total'),
+          draft: n(c, 'draft'),
+          inReview: n(c, 'in_review'),
+          live: n(c, 'live'),
+          reserved: n(c, 'reserved'),
+          sold: n(c, 'sold'),
+          withdrawn: n(c, 'withdrawn'),
+        },
+        byKind: { notes: n(c, 'notes'), coins: n(c, 'coins'), other: n(c, 'other') },
+        views: n(c, 'views'),
+        sales: {
+          orders: n(s, 'orders'),
+          completed: n(s, 'completed'),
+          awaitingPayment: n(s, 'awaiting_payment'),
+          awaitingDispatch: n(s, 'awaiting_dispatch'),
+          /** What buyers paid, on orders where payment actually cleared. */
+          grossInr: rupees(s, 'gross_paise'),
+          /** What reaches the seller, after commission, GST and TDS. */
+          payoutInr: rupees(s, 'payout_paise'),
+          /** Including orders still awaiting payment. Not yet earned. */
+          committedInr: rupees(s, 'committed_paise'),
+        },
+        auctions: {
+          live: n(a, 'live'),
+          scheduled: n(a, 'scheduled'),
+          ended: n(a, 'ended'),
+          bids: n(a, 'bids'),
+        },
+      },
+      listings: rows.rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        state: r.state,
+        kind: r.kind,
+        priceInr: r.price_paise === null ? null : Number(r.price_paise) / 100,
+        grade: r.grade,
+        views: r.view_count,
+        photoCount: Number(r.photo_count),
+        imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
+        serialDigits: r.serial_digits,
+        denomination: r.denomination,
+        createdAt: r.created_at,
+      })),
+    });
+  });
 }

@@ -26,6 +26,7 @@ export function SiteHeader({
   compact?: boolean;
 }) {
   const isAdmin = user?.roles.includes('admin') ?? false;
+  const isSeller = user?.roles.includes('seller') ?? false;
 
   return (
     <div className="guilloche bg-primary">
@@ -44,6 +45,15 @@ export function SiteHeader({
               {link.label}
             </a>
           ))}
+
+          {isSeller && (
+            <a
+              href="/seller"
+              className="rounded-full border border-accent/50 px-3 py-1 text-xs text-accent-bright transition-colors hover:bg-accent hover:text-ink"
+            >
+              Dashboard
+            </a>
+          )}
 
           {isAdmin && (
             <a

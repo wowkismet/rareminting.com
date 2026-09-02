@@ -105,6 +105,7 @@ export interface ApiSeller {
 }
 
 export interface ApiListing {
+  sellerId?: string;
   id: string;
   title: string;
   state: string;

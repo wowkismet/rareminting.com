@@ -5,6 +5,10 @@ import { Wordmark } from './Wordmark.tsx';
 /**
  * The masthead and primary navigation.
  *
+ * Flat brand green, deliberately. The guilloche pattern belongs on the panels
+ * that are meant to look like a banknote; behind a logo and a row of links it
+ * competes with both and makes the wordmark harder to read.
+ *
  * Every link here goes to a page that exists. "Admin" appears only for staff —
  * not hidden as a security measure (the API is the boundary) but because a
  * console a buyer cannot open should not be advertised to them.
@@ -29,7 +33,7 @@ export function SiteHeader({
   const isSeller = user?.roles.includes('seller') ?? false;
 
   return (
-    <div className="guilloche bg-primary">
+    <div className="bg-primary">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-5">
         <a href="/" aria-label="Rare Minting home" className="shrink-0">
           <Wordmark size={compact ? 'sm' : 'md'} />

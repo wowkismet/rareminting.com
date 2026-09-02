@@ -24,7 +24,7 @@ export type ApiResult<T> =
   | { readonly ok: false; readonly status: number; readonly error: ApiError };
 
 export interface RequestOptions {
-  readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly token?: string | null;
   /** Seconds to cache. Omit for anything user-specific. */

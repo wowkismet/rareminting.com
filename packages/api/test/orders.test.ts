@@ -33,7 +33,7 @@ beforeEach(async () => {
     insert into commission_rules
       (category_id, seller_kind, take_rate_bps, listing_fee_paise,
        buyer_premium_bps, gst_rate_bps, tds_rate_bps)
-    values (null, null, 1000, 0, 0, 1800, 100)
+    values (null, null, 2000, 0, 0, 1800, 100)
     on conflict do nothing;
   `);
 });
@@ -111,8 +111,8 @@ describe('buying at the asking price', () => {
     );
     const o = row.rows[0]!;
     assert.equal(o['subtotal_paise'], '450000');
-    assert.equal(o['commission_paise'], '45000', '10%');
-    assert.equal(o['gst_on_commission_paise'], '8100', '18% of the commission');
+    assert.equal(o['commission_paise'], '90000', '20%');
+    assert.equal(o['gst_on_commission_paise'], '16200', '18% of the commission');
     assert.equal(o['tds_paise'], '4500', '1% of the seller gross');
     assert.equal(o['total_paise'], '450000', 'the buyer pays the asking price');
   });
@@ -177,8 +177,8 @@ describe('reading an order', () => {
     const res = await request(app, 'GET', `/v1/orders/${orderId}`, { token: seller });
     assert.equal(res.status, 200);
     const body = (await res.json()) as { order: { payoutInr?: number; commissionInr?: number } };
-    assert.equal(body.order.commissionInr, 450);
-    assert.equal(body.order.payoutInr, 4500 - 450 - 81 - 45);
+    assert.equal(body.order.commissionInr, 900, '20% of the sale price');
+    assert.equal(body.order.payoutInr, 4500 - 900 - 162 - 45);
   });
 
   it('does not show the buyer what the platform takes from the seller', async () => {

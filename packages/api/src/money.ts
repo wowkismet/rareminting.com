@@ -129,7 +129,7 @@ export function formatInr(paise: number): string {
  * rather than treating these as authoritative.
  */
 export const DEFAULT_RATES: Rates = {
-  takeRateBps: 1000, // 10%
+  takeRateBps: 2000, // 20%
   listingFeePaise: 0,
   buyerPremiumBps: 0,
   gstRateBps: 1800, // 18% on commission

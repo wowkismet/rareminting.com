@@ -305,3 +305,82 @@ export async function respondToOffer(data: FormData): Promise<void> {
   });
   revalidatePath('/orders');
 }
+
+/* ---------------- payouts ---------------- */
+
+export async function saveBankAccount(_prev: FormState, data: FormData): Promise<FormState> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const holderName = text(data, 'holderName');
+  const accountNumber = text(data, 'accountNumber');
+  const ifsc = text(data, 'ifsc');
+  const bankName = text(data, 'bankName');
+
+  if (holderName === '') return { error: 'Enter the account holder name.' };
+  if (accountNumber === '') return { error: 'Enter the account number.' };
+  if (ifsc === '') return { error: 'Enter the IFSC.' };
+
+  const result = await api('/v1/sellers/me/bank-account', {
+    method: 'PUT',
+    token,
+    body: { holderName, accountNumber, ifsc, ...(bankName === '' ? {} : { bankName }) },
+  });
+
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath('/seller/payouts');
+  return { error: null, notice: 'Bank account saved. Only the last four digits are kept visible.' };
+}
+
+export async function requestPayout(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const payoutId = text(data, 'payoutId');
+  if (payoutId === '') return;
+
+  await api(`/v1/payouts/${payoutId}/request`, { method: 'POST', token });
+  revalidatePath('/seller/payouts');
+}
+
+/* ---------------- staff: payouts and settlement ---------------- */
+
+export async function settleOrder(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const orderId = text(data, 'orderId');
+  if (orderId === '') return;
+
+  await api(`/v1/admin/orders/${orderId}/settle`, { method: 'POST', token });
+  revalidatePath('/admin');
+}
+
+export async function markPayoutPaid(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const payoutId = text(data, 'payoutId');
+  const reference = text(data, 'reference');
+  if (payoutId === '' || reference === '') return;
+
+  await api(`/v1/admin/payouts/${payoutId}/paid`, {
+    method: 'POST',
+    token,
+    body: { reference },
+  });
+  revalidatePath('/admin/payouts');
+}
+
+export async function holdPayout(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const payoutId = text(data, 'payoutId');
+  const reason = text(data, 'reason');
+  if (payoutId === '' || reason === '') return;
+
+  await api(`/v1/admin/payouts/${payoutId}/hold`, { method: 'POST', token, body: { reason } });
+  revalidatePath('/admin/payouts');
+}

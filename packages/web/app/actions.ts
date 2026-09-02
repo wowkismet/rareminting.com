@@ -455,3 +455,78 @@ export async function createCollectible(
   revalidatePath('/seller');
   redirect(`/listing/${result.data.listing.id}`);
 }
+
+/* ---------------- auctions ---------------- */
+
+export async function placeBid(_prev: FormState, data: FormData): Promise<FormState> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const auctionId = text(data, 'auctionId');
+  const maxInr = Number(text(data, 'maxInr'));
+  if (auctionId === '') return { error: 'Something went wrong. Reload and try again.' };
+  if (!Number.isFinite(maxInr) || maxInr <= 0) {
+    return { error: 'Enter the most you are willing to pay, in rupees.', field: 'maxInr' };
+  }
+
+  // A nonce per submission, so a retry from a flaky connection places one bid
+  // rather than two. Generated here rather than in the browser because a
+  // resubmitted form would otherwise send a fresh one each time.
+  const nonce = text(data, 'nonce');
+
+  const result = await api<{ currentInr: number; youAreWinning: boolean; extended: boolean }>(
+    `/v1/auctions/${auctionId}/bids`,
+    {
+      method: 'POST',
+      token,
+      body: { maxInr, ...(nonce === '' ? {} : { clientNonce: nonce }) },
+    },
+  );
+
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath(`/auctions/${auctionId}`);
+  revalidatePath('/auctions');
+
+  return {
+    error: null,
+    notice: result.data.youAreWinning
+      ? `You are winning at ₹${result.data.currentInr.toLocaleString('en-IN')}.${
+          result.data.extended ? ' Your bid extended the auction.' : ''
+        }`
+      : `You were outbid. The price is now ₹${result.data.currentInr.toLocaleString('en-IN')}.`,
+  };
+}
+
+export async function startAuction(_prev: FormState, data: FormData): Promise<FormState> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const startingInr = Number(text(data, 'startingInr'));
+  const reserveRaw = text(data, 'reserveInr');
+  const days = Number(text(data, 'days'));
+
+  if (listingId === '') return { error: 'Choose a listing to auction.' };
+  if (!Number.isFinite(startingInr) || startingInr <= 0) {
+    return { error: 'Set a starting price in rupees.', field: 'startingInr' };
+  }
+  const runFor = Number.isFinite(days) && days > 0 ? days : 7;
+
+  const result = await api<{ auction: { id: string } }>(`/v1/listings/${listingId}/auction`, {
+    method: 'POST',
+    token,
+    body: {
+      startingInr,
+      endsAt: new Date(Date.now() + runFor * 86_400_000).toISOString(),
+      ...(reserveRaw === '' || !Number.isFinite(Number(reserveRaw))
+        ? {}
+        : { reserveInr: Number(reserveRaw) }),
+    },
+  });
+
+  if (!result.ok) return { error: result.error.message };
+
+  revalidatePath('/seller');
+  redirect(`/auctions/${result.data.auction.id}`);
+}

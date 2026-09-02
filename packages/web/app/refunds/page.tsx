@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 
-import { COMPANY, POLICY_LAST_UPDATED, REFUND_POLICY, rupees } from '@rareminting/config';
+import { COMPANY, REFUND_POLICY, rupees } from '@rareminting/config';
 
-import { SiteFooter } from '@/components/SiteFooter.tsx';
-import { Wordmark } from '@/components/Wordmark.tsx';
+import { PolicyPage, Section } from '@/components/PolicyPage.tsx';
 
 export const metadata: Metadata = {
   title: 'Refunds & Cancellations',
@@ -19,43 +18,18 @@ const {
   freeCancellationHours,
 } = REFUND_POLICY;
 
-function Section({
-  id,
-  heading,
-  children,
-}: {
-  id: string;
-  heading: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="flex flex-col gap-3 scroll-mt-8">
-      <h2 className="font-display text-2xl text-slate">{heading}</h2>
-      {children}
-    </section>
-  );
-}
-
 export default function RefundsPage() {
   return (
-    <div>
-      <header className="guilloche bg-primary">
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-5 py-10">
-          <a href="/" aria-label="Rare Minting home">
-            <Wordmark />
-          </a>
-          <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent-bright">
-            Refunds &amp; cancellations
-          </p>
-        </div>
-      </header>
-
-      <main className="mx-auto flex max-w-3xl flex-col gap-10 px-5 py-14 text-[0.95rem] leading-relaxed text-slate">
+    <PolicyPage
+      eyebrow="Refunds"
+      title="Refunds &amp; cancellations"
+      intro={
         <p className="text-slate-dim">
-          Last updated {POLICY_LAST_UPDATED}. This policy applies to every purchase made on
-          rareminting.com from {COMPANY.legalName}, whether at a fixed price, through an accepted
-          offer, or at auction.
+          This applies to every purchase made on rareminting.com from {COMPANY.legalName}, whether
+          at a fixed price, through an accepted offer, or at auction.
         </p>
+      }
+    >
 
         <Section id="principle" heading="The principle">
           <p>
@@ -241,9 +215,6 @@ export default function RefundsPage() {
             {COMPANY.address.city} {COMPANY.address.postalCode}.
           </p>
         </Section>
-      </main>
-
-      <SiteFooter />
-    </div>
+    </PolicyPage>
   );
 }

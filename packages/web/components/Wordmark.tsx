@@ -1,26 +1,28 @@
+import Image from 'next/image';
+
 /**
- * The wordmark, set as type rather than as an image.
+ * The Rare Minting logo.
  *
- * Bold italic Playfair Display: a Didone with genuinely drawn italic
- * letterforms, so the curves are cut into the face rather than a slant applied
- * to an upright. In cream on the deep green, which is the brand pairing.
+ * The supplied artwork: gold and green with the crown over the M, on a
+ * transparent ground so it sits on the deep green without a white box.
+ * `next/image` serves it resized and in a modern format per device.
  *
- * Type rather than a PNG means it stays crisp at any size, needs no download,
- * is selectable, and reads correctly to a screen reader without alt text.
+ * Sizes are widths rather than heights because the lockup is very wide (3.5:1);
+ * capping the width is what stops it dominating a narrow screen.
  */
 export function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
-  const scale =
-    size === 'lg'
-      ? 'text-5xl sm:text-6xl'
-      : size === 'sm'
-        ? 'text-xl'
-        : 'text-2xl sm:text-3xl';
+  const width =
+    size === 'lg' ? 'w-[280px] sm:w-[420px]' : size === 'sm' ? 'w-[150px] sm:w-[180px]' : 'w-[200px] sm:w-[260px]';
 
   return (
-    <span
-      className={`font-display font-bold italic text-cream ${scale} leading-none tracking-[0.06em]`}
-    >
-      RAREMINTING
-    </span>
+    <Image
+      src="/rare-minting-logo.png"
+      alt="Rare Minting"
+      width={2171}
+      height={724}
+      priority
+      sizes={size === 'lg' ? '420px' : size === 'sm' ? '180px' : '260px'}
+      className={`h-auto ${width}`}
+    />
   );
 }

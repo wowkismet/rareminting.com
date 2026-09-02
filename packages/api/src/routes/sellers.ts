@@ -390,6 +390,7 @@ export function registerSellerRoutes(router: Router, database: Database): void {
       title: string;
       state: string;
       kind: string;
+      sale_mode: string;
       price_paise: string | null;
       grade: string | null;
       view_count: number;
@@ -399,7 +400,7 @@ export function registerSellerRoutes(router: Router, database: Database): void {
       denomination: number | null;
       created_at: string;
     }>(
-      `select l.id, l.title, l.state, l.kind, l.price_paise::text as price_paise, l.grade,
+      `select l.id, l.title, l.state, l.kind, l.sale_mode, l.price_paise::text as price_paise, l.grade,
               l.view_count,
               (select count(*) from media m where m.listing_id = l.id)::text as photo_count,
               (select m.storage_key from media m
@@ -459,6 +460,7 @@ export function registerSellerRoutes(router: Router, database: Database): void {
         title: r.title,
         state: r.state,
         kind: r.kind,
+        saleMode: r.sale_mode,
         priceInr: r.price_paise === null ? null : Number(r.price_paise) / 100,
         grade: r.grade,
         views: r.view_count,

@@ -187,7 +187,7 @@ export default async function SellPage() {
             {/* Coins and everything else. Kept as a separate form rather than a
                 toggle, because the two have almost no fields in common and a
                 form that rearranged itself would be worse than two clear ones. */}
-            <div className="mt-4 border-t border-sand-line pt-10">
+            <div id="collectible" className="mt-4 scroll-mt-6 border-t border-sand-line pt-10">
               <h2 className="font-display text-2xl text-slate">
                 Or list a coin or other collectible
               </h2>

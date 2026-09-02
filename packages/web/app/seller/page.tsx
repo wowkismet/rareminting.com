@@ -30,6 +30,27 @@ export default async function SellerDashboardPage() {
       action={{ href: '/sell', label: 'List something new' }}
     >
       <div className="flex flex-col gap-10">
+        <div className="flex flex-wrap gap-3">
+          <a
+            href="/sell"
+            className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+          >
+            List a banknote
+          </a>
+          <a
+            href="/sell#collectible"
+            className="rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
+          >
+            List a coin or collectible
+          </a>
+          <a
+            href="/auctions"
+            className="rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
+          >
+            See live auctions
+          </a>
+        </div>
+
         {!seller.approved && (
           <div className="rounded-sm border border-accent-deep/40 bg-sand-raised p-5">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent-deep">
@@ -91,8 +112,9 @@ export default async function SellerDashboardPage() {
           <h2 className="mb-4 font-display text-xl text-slate">Auctions</h2>
           {stats.auctions.live + stats.auctions.scheduled + stats.auctions.ended === 0 ? (
             <p className="rounded-sm border border-sand-line bg-sand-raised p-6 text-sm text-slate-dim">
-              You have no auction lots. Auctions are not open for listing yet — every item is sold
-              at a fixed price or by offer for now.
+              You have no auction lots. Open any draft below and choose{' '}
+              <span className="text-slate">Sell by auction instead</span> to put one under the
+              hammer.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -112,8 +134,8 @@ export default async function SellerDashboardPage() {
             <p className="mt-2 text-sm leading-relaxed text-slate-dim">
               {needsPhotos.length} of your {listings.length} listing
               {listings.length === 1 ? '' : 's'} {needsPhotos.length === 1 ? 'has' : 'have'} no
-              photograph. Buyers decide on the picture — open a listing below and use{' '}
-              <span className="text-slate">Add a photograph</span>.
+              photograph. Buyers decide on the picture — use{' '}
+              <span className="text-slate">Add a photograph</span> on any item below.
             </p>
           </div>
         )}

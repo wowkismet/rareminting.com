@@ -19,6 +19,7 @@ export interface SellerListing {
   title: string;
   state: string;
   kind: string;
+  saleMode: string;
   priceInr: number | null;
   grade: string | null;
   views: number;

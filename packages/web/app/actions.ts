@@ -218,6 +218,9 @@ export async function moderateListing(data: FormData): Promise<void> {
   });
   revalidatePath('/admin');
   revalidatePath(`/listing/${listingId}`);
+  revalidatePath('/seller');
+  revalidatePath('/seller/items');
+  revalidatePath('/seller/photos');
 }
 
 export async function uploadPhoto(data: FormData): Promise<void> {

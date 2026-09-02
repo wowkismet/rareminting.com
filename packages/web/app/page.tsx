@@ -86,6 +86,24 @@ const COLLECTIONS: readonly {
     blurb: 'Every digit the same — 777777',
     href: '/browse?pattern=solid',
   },
+  {
+    emoji: '🪜',
+    label: 'Ladders',
+    blurb: 'Digits in sequence — 123456',
+    href: '/browse?pattern=ladder',
+  },
+  {
+    emoji: '🔁',
+    label: 'Repeaters',
+    blurb: 'A block repeated — 123123',
+    href: '/browse?pattern=repeater',
+  },
+  {
+    emoji: '🗓️',
+    label: 'Novelty numbers',
+    blurb: 'Numbers that mean something — 1947',
+    href: '/browse?pattern=novelty',
+  },
 ];
 
 const STEPS: readonly { n: string; title: string; body: string }[] = [

@@ -1,55 +1,15 @@
 /**
- * node:http adapter.
+ * Process entry point.
  *
- * The only file that knows about sockets. Everything else works in terms of
- * Request and Response.
+ * Owns the database pool, the port and the shutdown signals. The socket-level
+ * translation lives in node-adapter.ts, where it can be tested.
  */
 
-import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Pool } from 'pg';
 
 import { createApp } from './app.ts';
-import { clientIp } from './http.ts';
+import { createNodeServer } from './node-adapter.ts';
 import type { Database, Db } from './db.ts';
-
-function toRequest(req: IncomingMessage, origin: string): Request {
-  const url = new URL(req.url ?? '/', origin);
-  const headers = new Headers();
-  for (const [key, value] of Object.entries(req.headers)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value)) for (const v of value) headers.append(key, v);
-    else headers.set(key, value);
-  }
-
-  const method = req.method ?? 'GET';
-  const hasBody = method !== 'GET' && method !== 'HEAD';
-
-  return new Request(url, {
-    method,
-    headers,
-    ...(hasBody
-      ? {
-          body: req as unknown as ReadableStream,
-          duplex: 'half',
-        }
-      : {}),
-  } as RequestInit);
-}
-
-async function send(res: ServerResponse, response: Response): Promise<void> {
-  const headers: Record<string, string> = {};
-  response.headers.forEach((value, key) => {
-    headers[key] = value;
-  });
-  res.writeHead(response.status, headers);
-  if (response.body === null) {
-    res.end();
-    return;
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  res.end(buffer);
-}
 
 async function main(): Promise<void> {
   const connectionString = process.env['DATABASE_URL'];
@@ -97,18 +57,7 @@ async function main(): Promise<void> {
   const host = process.env['HOST'] ?? '127.0.0.1';
   const origin = `http://${host}:${port}`;
 
-  const server = createServer((req, res) => {
-    const request = toRequest(req, origin);
-    const ip = clientIp(request, req.socket.remoteAddress ?? null);
-    app
-      .handle(request, ip)
-      .then((response) => send(res, response))
-      .catch((error: unknown) => {
-        console.error('[api] adapter failure:', error);
-        if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
-        res.end('{"error":"internal_error"}');
-      });
-  });
+  const server = createNodeServer(app, origin);
 
   const shutdown = (signal: string): void => {
     console.log(`[api] ${signal} received, closing`);

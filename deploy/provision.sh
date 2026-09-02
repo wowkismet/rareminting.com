@@ -42,6 +42,14 @@ fi
 mkdir -p "$APP_DIR/releases" "$APP_DIR/uploads"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
+# Nginx serves uploaded photographs straight off the disk, so www-data has to
+# be able to traverse $APP_DIR. Giving it group membership keeps the directory
+# closed to every other local account, which `chmod o+x` would not. Secrets
+# live in /etc/rareminting.env (root-only, mode 600), outside this tree.
+if id -u www-data >/dev/null 2>&1; then
+  usermod -aG "$APP_USER" www-data
+fi
+
 # --- database -----------------------------------------------------------
 # Postgres listens on localhost only; the firewall never opens 5432.
 systemctl enable --now postgresql
@@ -140,7 +148,9 @@ sed -i "s|__DOMAINS__|${DOMAINS}|g; s|__PORT__|${PORT}|g; s|__APP_DIR__|${APP_DI
 ln -sfn /etc/nginx/sites-available/rareminting /etc/nginx/sites-enabled/rareminting
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
-systemctl reload nginx
+# A restart, not a reload: workers pick up supplementary groups only when
+# they are spawned, so a reload would leave www-data unable to read uploads.
+systemctl restart nginx
 
 # Writing the site file above discards the 443 server block certbot added, which
 # silently takes HTTPS down on every re-provision. If a certificate already

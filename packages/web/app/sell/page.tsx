@@ -48,13 +48,19 @@ const GRADES = [
  * The hints say which fields apply to which choice; the server ignores the
  * auction fields entirely when a fixed price is chosen.
  */
-function SaleModeFields({ suggestedStart }: { suggestedStart: string }) {
+function SaleModeFields({
+  suggestedStart,
+  defaultMode,
+}: {
+  suggestedStart: string;
+  defaultMode: string;
+}) {
   return (
     <>
       <Select
         label="How to sell it"
         name="saleMode"
-        defaultValue="fixed"
+        defaultValue={defaultMode}
         options={[
           { value: 'fixed', label: 'Fixed price — sell at your asking price' },
           { value: 'auction', label: 'Auction — let bidders decide' },
@@ -119,7 +125,14 @@ function PhotoField() {
   );
 }
 
-export default async function SellPage() {
+export default async function SellPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string }>;
+}) {
+  // Arriving from "List for auction" opens the form already set to auction,
+  // so the seller does not have to find the selector and change it.
+  const saleMode = (await searchParams).mode === "auction" ? "auction" : "fixed";
   const user = await currentUser();
   if (user === null) redirect('/signin');
 
@@ -262,7 +275,7 @@ export default async function SellPage() {
                 placeholder="4500"
               />
 
-              <SaleModeFields suggestedStart="1000" />
+              <SaleModeFields suggestedStart="1000" defaultMode={saleMode} />
               <PhotoField />
               <Field label="Anything else worth knowing" name="description" />
             </ActionForm>
@@ -330,7 +343,7 @@ export default async function SellPage() {
                   hint="A standard reference lets a buyer look the type up independently."
                 />
                 <Select label="Condition" name="grade" options={GRADES} defaultValue="XF" />
-                <SaleModeFields suggestedStart="1000" />
+                <SaleModeFields suggestedStart="1000" defaultMode={saleMode} />
               <PhotoField />
               <Field label="Anything else worth knowing" name="description" />
               </ActionForm>

@@ -98,6 +98,11 @@ export function sellerMenu(data: Dashboard): MenuSection[] {
         { href: '/sell', label: 'List an item' },
         { href: '/seller/items', label: 'My items', badge: data.stats.listings.total },
         { href: '/seller/photos', label: 'Needs photos', badge: needsPhotos },
+        {
+          href: '/seller/auctions',
+          label: 'My auctions',
+          badge: data.stats.auctions.live + data.stats.auctions.scheduled,
+        },
       ],
     },
     {

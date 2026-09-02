@@ -44,10 +44,16 @@ export default async function SellerDashboardPage() {
             List a coin or collectible
           </a>
           <a
-            href="/auctions"
+            href="/sell?mode=auction"
+            className="rounded-full border border-accent-deep/50 bg-accent-deep/10 px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
+          >
+            List for auction
+          </a>
+          <a
+            href="/seller/auctions"
             className="rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
           >
-            See live auctions
+            My auctions
           </a>
         </div>
 
@@ -112,9 +118,9 @@ export default async function SellerDashboardPage() {
           <h2 className="mb-4 font-display text-xl text-slate">Auctions</h2>
           {stats.auctions.live + stats.auctions.scheduled + stats.auctions.ended === 0 ? (
             <p className="rounded-sm border border-sand-line bg-sand-raised p-6 text-sm text-slate-dim">
-              You have no auction lots. Open any draft below and choose{' '}
-              <span className="text-slate">Sell by auction instead</span> to put one under the
-              hammer.
+              You have no auction lots yet. Choose{' '}
+              <span className="text-slate">Auction</span> when you list an item, or open any draft
+              below and choose <span className="text-slate">Sell by auction instead</span>.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

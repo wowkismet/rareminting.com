@@ -443,43 +443,89 @@ export default async function Home({
           )}
         </section>
 
-        {/* Sell */}
-        <section className="overflow-hidden rounded-sm border border-sand-line bg-sand-raised">
-          <div className="flex flex-col gap-6 p-8 sm:p-10">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent-deep">
-                Sell
-              </p>
-              <h2 className="mt-2 font-display text-3xl text-slate">
-                Turn your collection into someone&rsquo;s keepsake
-              </h2>
-              <p className="mt-3 max-w-2xl text-slate-dim">
-                Register in six details, and once an admin approves you there is no limit on how
-                much you can list. Every note you add is read for its dates automatically, so the
-                people searching for that day can find it.
-              </p>
-            </div>
+        {/* Sell.
+            The photograph carries the argument, so it is not decoration: this
+            is a real note whose serial spells a real date. The pitch beside it
+            only has to say what happens next. */}
+        <section className="note-field overflow-hidden rounded-sm border border-line">
+          <div aria-hidden className="note-field-image" />
+          <div aria-hidden className="note-field-fade" />
 
-            <ul className="flex list-none flex-col gap-2 p-0 text-sm text-slate-dim">
-              {[
-                'Free to register and free to list',
-                'Every serial read for its dates, and every fancy-number pattern tagged',
-                'Sell at a fixed price or take offers',
-                'Payment held until the buyer has the note and the inspection window closes',
-              ].map((line) => (
-                <li key={line} className="border-l-2 border-accent-deep/50 pl-4">
-                  {line}
-                </li>
-              ))}
-            </ul>
+          <div className="grid items-center gap-10 p-8 sm:p-12 lg:grid-cols-2 lg:gap-14">
+            {/* The note, and what its number turned out to mean. */}
+            <figure className="flex flex-col gap-5">
+              <img
+                src="/note-story.webp"
+                alt="A ₹500 banknote with the serial number 8WP 040891"
+                loading="lazy"
+                width={1200}
+                height={900}
+                className="w-full rotate-[-1.2deg] rounded-sm border border-line/60 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.75)]"
+              />
 
-            <div>
-              <a
-                href="/sell"
-                className="inline-block rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
-              >
-                Register as a seller
-              </a>
+              <figcaption className="rounded-sm border border-accent/30 bg-ink/50 px-5 py-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
+                  Serial number
+                </p>
+                <p className="mt-2 font-mono text-2xl tracking-[0.16em] tabular-nums sm:text-3xl">
+                  <span className="text-cream-dim">8WP </span>
+                  <span className="engraved text-accent-bright">040891</span>
+                </p>
+                <p className="mt-3 text-sm text-cream-dim">
+                  Reads as <span className="text-cream">4 August 1991</span> — somebody&rsquo;s
+                  birthday, anniversary, or the day they arrived. That is the whole idea: a note
+                  worth more to one person than to anyone else.
+                </p>
+              </figcaption>
+            </figure>
+
+            {/* The pitch. */}
+            <div className="flex flex-col gap-7">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent">
+                  Sell
+                </p>
+                <h2 className="mt-3 font-display text-3xl leading-tight text-cream sm:text-4xl">
+                  Somewhere in your collection is somebody&rsquo;s date.
+                </h2>
+                <p className="mt-4 text-cream-dim">
+                  Every note you list is read for the dates its digits can spell and every
+                  fancy-number pattern it carries — so the person looking for that day finds it
+                  without either of you knowing to look for the other.
+                </p>
+              </div>
+
+              <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+                {[
+                  ['Free to list', 'No listing fee, and no cap once you are approved.'],
+                  ['Six details to register', 'Name, mobile, email, PAN, Aadhaar. That is all.'],
+                  ['Fixed price, offers or auction', 'Whichever suits the piece.'],
+                  [
+                    'You are paid after delivery',
+                    'The buyer’s money is held until they have the note and the inspection window closes.',
+                  ],
+                ].map(([term, detail]) => (
+                  <div key={term} className="border-l-2 border-accent/40 pl-4">
+                    <dt className="text-sm text-cream">{term}</dt>
+                    <dd className="mt-1 text-xs leading-relaxed text-cream-dim">{detail}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <a
+                  href="/sell"
+                  className="rounded-full bg-accent px-8 py-3 text-sm font-medium text-ink transition-colors hover:bg-accent-bright"
+                >
+                  Register as a seller
+                </a>
+                <a
+                  href="/how-it-works#selling"
+                  className="text-sm text-cream-dim underline underline-offset-4 transition-colors hover:text-accent-bright"
+                >
+                  How selling works
+                </a>
+              </div>
             </div>
           </div>
         </section>

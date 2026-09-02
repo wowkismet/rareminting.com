@@ -28,7 +28,7 @@ export function createApp(db: Database): App {
 
   router.add('GET', '/health', async () => json({ status: 'ok' }));
   registerAuthRoutes(router);
-  registerSellerRoutes(router);
+  registerSellerRoutes(router, db);
   registerListingRoutes(router, db);
   registerAdminRoutes(router);
   registerMediaRoutes(router);

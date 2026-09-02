@@ -118,6 +118,14 @@ export function ActionForm({
           {state.error}
         </p>
       )}
+      {state.notice != null && state.notice !== '' && (
+        <p
+          role="status"
+          className="rounded-sm border border-accent-deep/50 bg-accent-deep/10 px-4 py-3 text-sm text-slate"
+        >
+          {state.notice}
+        </p>
+      )}
       <div>
         <Submit>{submitLabel}</Submit>
       </div>

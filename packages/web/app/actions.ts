@@ -75,26 +75,53 @@ export async function signOut(): Promise<void> {
   redirect('/');
 }
 
+/**
+ * Send a one-time code to the seller's mobile.
+ *
+ * Reports rather than throws when OTP is not switched on, so the form can say
+ * "carry on without it" instead of looking broken.
+ */
+export async function sendMobileOtp(_prev: FormState, data: FormData): Promise<FormState> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const mobile = text(data, 'mobile');
+  if (mobile === '') return { error: 'Enter your mobile number first.' };
+
+  const result = await api<{ sent: boolean; to?: string; message?: string }>('/v1/otp/mobile', {
+    method: 'POST',
+    token,
+    body: { mobile },
+  });
+
+  if (!result.ok) return { error: result.error.message };
+  if (!result.data.sent) {
+    return { error: result.data.message ?? 'Mobile verification is not switched on yet.' };
+  }
+  return { error: null, notice: `Code sent to ${result.data.to ?? 'your mobile'}.` };
+}
+
 export async function registerSeller(_prev: FormState, data: FormData): Promise<FormState> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');
 
-  const displayName = text(data, 'displayName');
-  const kind = text(data, 'kind');
-  const legalName = text(data, 'legalName');
-  const gstin = text(data, 'gstin');
+  const fullName = text(data, 'fullName');
+  const mobile = text(data, 'mobile');
+  const pan = text(data, 'pan');
+  const aadhaar = text(data, 'aadhaar');
+  const otp = text(data, 'otp');
 
-  if (displayName === '') return { error: 'Enter the name buyers will see.' };
+  // Caught here so the seller is not told to re-enter their Aadhaar over a
+  // missing name. The API validates all of it again regardless.
+  if (fullName === '') return { error: 'Enter your name as printed on your PAN card.' };
+  if (mobile === '') return { error: 'Enter your mobile number.' };
+  if (pan === '') return { error: 'Enter your PAN.' };
+  if (aadhaar === '') return { error: 'Enter your Aadhaar number.' };
 
   const result = await api<{ seller: ApiSeller }>('/v1/sellers', {
     method: 'POST',
     token,
-    body: {
-      kind: kind === '' ? 'individual' : kind,
-      displayName,
-      ...(legalName === '' ? {} : { legalName }),
-      ...(gstin === '' ? {} : { gstin }),
-    },
+    body: { fullName, mobile, pan, aadhaar, ...(otp === '' ? {} : { otp }) },
   });
 
   if (!result.ok) return { error: result.error.message };

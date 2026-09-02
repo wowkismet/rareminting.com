@@ -7,6 +7,8 @@
 export interface FormState {
   readonly error: string | null;
   readonly field?: string | null;
+  /** A confirmation rather than a failure, e.g. "code sent". */
+  readonly notice?: string | null;
 }
 
 export const NO_ERROR: FormState = { error: null };

@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { createRig, reset } from './helpers.ts';
+import { approveSeller, createRig, reset, sellerBody } from './helpers.ts';
 import { createNodeServer } from '../src/node-adapter.ts';
 
 /**
@@ -69,7 +69,7 @@ async function sellerWithListing(
   await fetch(`${base}/v1/sellers`, {
     method: 'POST',
     headers: { ...auth, 'content-type': 'application/json' },
-    body: JSON.stringify({ kind: 'individual', displayName: 'Adapter Test' }),
+    body: JSON.stringify(sellerBody({ fullName: 'Adapter Test' })),
   });
 
   const created = await fetch(`${base}/v1/listings`, {

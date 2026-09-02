@@ -100,7 +100,8 @@ export interface ApiSeller {
   displayName: string;
   kycState: string;
   mintingVerified: boolean;
-  listingLimit: number;
+  /** Approved by an admin, and so able to publish — without any cap. */
+  approved: boolean;
 }
 
 export interface ApiListing {

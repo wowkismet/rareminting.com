@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { createRig, request, reset } from './helpers.ts';
+import { approveSeller, createRig, request, reset, sellerBody } from './helpers.ts';
 import type { App } from '../src/app.ts';
 
 /**
@@ -65,7 +65,7 @@ describe('admin access', () => {
     const { token } = await signUp('seller@example.com');
     await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'individual', displayName: 'S' },
+      body: sellerBody({ fullName: 'Sunil Kapoor' }),
     });
     assert.equal((await request(app, 'GET', '/v1/admin/sellers', { token })).status, 404);
   });
@@ -93,12 +93,12 @@ describe('KYC decisions', () => {
     const { token } = await signUp(email);
     const res = await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'individual', displayName: 'Kapoor Numismatics' },
+      body: sellerBody({ fullName: 'Kavya Kapoor' }),
     });
     return ((await res.json()) as { seller: { id: string } }).seller.id;
   }
 
-  it('verifying grants the badge and raises the listing limit', async () => {
+  it('verifying grants the badge and records who approved', async () => {
     const sellerId = await sellerFor('s1@example.com');
     const admin = await makeAdmin('a1@example.com');
 
@@ -108,12 +108,44 @@ describe('KYC decisions', () => {
     });
     assert.equal(res.status, 200);
 
-    const row = await pg.query<{ is_minting_verified: boolean; listing_limit: number }>(
-      `select is_minting_verified, listing_limit from sellers where id = $1`,
+    const row = await pg.query<{
+      is_minting_verified: boolean;
+      kyc_state: string;
+      kyc_verified_at: string | null;
+      approved_by: string | null;
+    }>(
+      `select is_minting_verified, kyc_state, kyc_verified_at::text as kyc_verified_at,
+              approved_by::text as approved_by
+         from sellers where id = $1`,
       [sellerId],
     );
-    assert.equal(row.rows[0]!.is_minting_verified, true);
-    assert.ok(row.rows[0]!.listing_limit >= 100);
+    const seller = row.rows[0]!;
+    assert.equal(seller.is_minting_verified, true);
+    assert.equal(seller.kyc_state, 'verified');
+    assert.notEqual(seller.kyc_verified_at, null);
+    // An audit asks who decided, not just when.
+    assert.notEqual(seller.approved_by, null, 'no record of which admin approved');
+  });
+
+  it('clears the approval when a seller is later suspended', async () => {
+    const sellerId = await sellerFor('s1b@example.com');
+    const admin = await makeAdmin('a1b@example.com');
+
+    await request(app, 'POST', `/v1/admin/sellers/${sellerId}/kyc`, {
+      token: admin,
+      body: { kycState: 'verified' },
+    });
+    await request(app, 'POST', `/v1/admin/sellers/${sellerId}/kyc`, {
+      token: admin,
+      body: { kycState: 'suspended', reason: 'Under investigation' },
+    });
+
+    const row = await pg.query<{ is_minting_verified: boolean; approved_by: string | null }>(
+      `select is_minting_verified, approved_by::text as approved_by from sellers where id = $1`,
+      [sellerId],
+    );
+    assert.equal(row.rows[0]!.is_minting_verified, false);
+    assert.equal(row.rows[0]!.approved_by, null, 'a suspended seller still looked approved');
   });
 
   it('refuses a rejection with no reason', async () => {
@@ -190,7 +222,7 @@ describe('listing moderation', () => {
     const { token } = await signUp('mod-seller@example.com');
     await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'individual', displayName: 'S' },
+      body: sellerBody({ fullName: 'Sunil Kapoor' }),
     });
     const created = await request(app, 'POST', '/v1/listings', {
       token,
@@ -225,7 +257,7 @@ describe('listing moderation', () => {
     const { token } = await signUp('owner@example.com');
     await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'individual', displayName: 'S' },
+      body: sellerBody({ fullName: 'Sunil Kapoor' }),
     });
     const res = await request(
       app,

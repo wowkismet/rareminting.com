@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { createRig, request, reset } from './helpers.ts';
+import { approveSeller, createRig, request, reset, sellerBody } from './helpers.ts';
 import type { App } from '../src/app.ts';
 
 /**
@@ -50,10 +50,17 @@ async function publishedListing(
   serial: string,
   priceInr = 4500,
 ): Promise<string> {
-  await request(app, 'POST', '/v1/sellers', {
+  const registered = await request(app, 'POST', '/v1/sellers', {
     token,
-    body: { kind: 'individual', displayName: 'Kapoor Numismatics' },
+    body: sellerBody({ fullName: 'Kavya Kapoor' }),
   }).catch(() => undefined);
+
+  // Nothing reaches a buyer until an admin approves the seller, so these
+  // tests — which are about buying, not onboarding — approve up front.
+  if (registered !== undefined && registered.status === 201) {
+    const { seller } = (await registered.json()) as { seller: { id: string } };
+    await approveSeller(pg, seller.id);
+  }
 
   const created = await request(app, 'POST', '/v1/listings', {
     token,
@@ -140,7 +147,7 @@ describe('buying at the asking price', () => {
     const seller = await account('s5@example.com');
     await request(app, 'POST', '/v1/sellers', {
       token: seller,
-      body: { kind: 'individual', displayName: 'S' },
+      body: sellerBody({ fullName: 'Sunil Kapoor' }),
     });
     const created = await request(app, 'POST', '/v1/listings', {
       token: seller,

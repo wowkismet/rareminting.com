@@ -76,11 +76,32 @@ TRUST_PROXY=1
 # RAZORPAY_KEY_ID=
 # RAZORPAY_KEY_SECRET=
 # RAZORPAY_WEBHOOK_SECRET=
+# SMS provider for one-time codes. Unset means OTP is switched off, and the
+# service says so rather than letting anyone past.
+# SMS_PROVIDER=
 ENVFILE
   echo "==> database created; credentials written to ${ENV_FILE}"
 else
   echo "==> database role already exists; leaving ${ENV_FILE} untouched"
 fi
+
+# --- KYC pepper ---------------------------------------------------------
+# The key that turns a PAN or an Aadhaar number into a stored HMAC. Generated
+# once and never rotated: every hash on file was computed with it, so replacing
+# it would orphan every seller's identity record and make duplicate detection
+# silently stop working. Hence the append-if-absent rather than a rewrite.
+if [ ! -f "${ENV_FILE}" ]; then
+  install -m 600 /dev/null "${ENV_FILE}"
+fi
+if ! grep -q '^KYC_NUMBER_PEPPER=' "${ENV_FILE}"; then
+  PEPPER="$(head -c 48 /dev/urandom | base64 | tr -d '/+=' | head -c 48)"
+  printf '\n# Generated once. Never change this: it would orphan every stored KYC hash.\nKYC_NUMBER_PEPPER=%s\n' "${PEPPER}" >> "${ENV_FILE}"
+  unset PEPPER
+  echo "==> KYC pepper generated"
+else
+  echo "==> KYC pepper already present; left untouched"
+fi
+chmod 600 "${ENV_FILE}"
 
 # --- firewall -----------------------------------------------------------
 # Order matters: allow SSH *before* enabling, or you lock yourself out.

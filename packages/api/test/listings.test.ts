@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { createRig, request, reset } from './helpers.ts';
+import { approveSeller, createRig, request, reset, sellerBody } from './helpers.ts';
 import type { App } from '../src/app.ts';
 
 /**
@@ -30,9 +30,17 @@ beforeEach(async () => {
   await reset(pg);
 });
 
-async function signUp(email = 'seller@example.com'): Promise<string> {
+// Unique per call, so a test registering two accounts does not collide on the
+// email. Reset between tests clears the table, so the counter need not.
+let accountCounter = 0;
+
+async function signUp(email?: string): Promise<string> {
+  accountCounter += 1;
   const res = await request(app, 'POST', '/v1/auth/register', {
-    body: { email, password: 'correct horse battery' },
+    body: {
+      email: email ?? `seller${accountCounter}@example.com`,
+      password: 'correct horse battery',
+    },
   });
   assert.equal(res.status, 201, await res.clone().text());
   return ((await res.json()) as { token: string }).token;
@@ -41,10 +49,22 @@ async function signUp(email = 'seller@example.com'): Promise<string> {
 async function becomeSeller(token: string): Promise<string> {
   const res = await request(app, 'POST', '/v1/sellers', {
     token,
-    body: { kind: 'individual', displayName: 'Kapoor Numismatics' },
+    body: sellerBody({ fullName: 'Kavya Kapoor' }),
   });
   assert.equal(res.status, 201, await res.clone().text());
   return ((await res.json()) as { seller: { id: string } }).seller.id;
+}
+
+/**
+ * A seller who may actually publish.
+ *
+ * Most tests here are about listings rather than about onboarding, so they
+ * want a seller past the approval gate.
+ */
+async function approvedSeller(token: string): Promise<string> {
+  const id = await becomeSeller(token);
+  await approveSeller(pg, id);
+  return id;
 }
 
 const LISTING = {
@@ -67,14 +87,14 @@ describe('seller onboarding', () => {
     const token = await signUp();
     const res = await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'individual', displayName: 'Kapoor Numismatics' },
+      body: sellerBody({ fullName: 'Kavya Kapoor' }),
     });
     assert.equal(res.status, 201);
 
     const body = (await res.json()) as {
       seller: { displayName: string; kycState: string; mintingVerified: boolean };
     };
-    assert.equal(body.seller.displayName, 'Kapoor Numismatics');
+    assert.equal(body.seller.displayName, 'Kavya Kapoor');
     assert.equal(body.seller.kycState, 'pending', 'KYC starts pending');
     assert.equal(body.seller.mintingVerified, false);
 
@@ -88,25 +108,142 @@ describe('seller onboarding', () => {
     await becomeSeller(token);
     const again = await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'company', displayName: 'Another' },
+      body: sellerBody({ fullName: 'Another Person' }),
     });
     assert.equal(again.status, 409);
   });
 
   it('requires sign-in', async () => {
     const res = await request(app, 'POST', '/v1/sellers', {
-      body: { kind: 'individual', displayName: 'Nope' },
+      body: sellerBody(),
     });
     assert.equal(res.status, 401);
   });
 
-  it('rejects an unknown seller kind', async () => {
+  it('never returns the identity numbers it was given', async () => {
     const token = await signUp();
+    const body = sellerBody({ fullName: 'Kavya Kapoor' });
+    const res = await request(app, 'POST', '/v1/sellers', { token, body });
+    assert.equal(res.status, 201);
+
+    const text = await res.text();
+    assert.equal(text.includes(String(body['aadhaar'])), false, 'Aadhaar came back in the response');
+    assert.equal(text.includes(String(body['pan'])), false, 'PAN came back in the response');
+    // The last four are deliberately present: support needs them.
+    assert.ok(text.includes(String(body['pan']).slice(-4)));
+  });
+
+  it('stores no identity number in the clear', async () => {
+    const token = await signUp();
+    const body = sellerBody({ fullName: 'Kavya Kapoor' });
+    await request(app, 'POST', '/v1/sellers', { token, body });
+
+    const stored = await pg.query<{ number_hash: string; number_last4: string }>(
+      `select number_hash, number_last4 from kyc_documents`,
+    );
+    assert.equal(stored.rows.length, 2, 'a PAN and an Aadhaar');
+    for (const row of stored.rows) {
+      assert.equal(row.number_hash.includes(String(body['aadhaar'])), false);
+      assert.equal(row.number_hash.includes(String(body['pan'])), false);
+      assert.match(row.number_hash, /^[0-9a-f]{64}$/, 'an HMAC, hex encoded');
+      assert.match(row.number_last4, /^[0-9A-Z]{4}$/);
+    }
+  });
+
+  it('rejects a malformed PAN, Aadhaar or mobile', async () => {
+    for (const [field, value] of [
+      ['pan', 'NOTAPAN123'],
+      ['aadhaar', '123456789012'], // reserved leading digit, and a bad checksum
+      ['mobile', '1234567890'], // not a mobile range
+      ['fullName', 'K'],
+    ] as const) {
+      const token = await signUp();
+      const res = await request(app, 'POST', '/v1/sellers', {
+        token,
+        body: sellerBody({ [field]: value }),
+      });
+      assert.equal(res.status, 400, `accepted a bad ${field}`);
+    }
+  });
+
+  it('rejects a company PAN, because a person registers to sell', async () => {
+    const token = await signUp();
+    // The fourth character is the holder type; C is a company.
     const res = await request(app, 'POST', '/v1/sellers', {
       token,
-      body: { kind: 'wizard', displayName: 'Nope' },
+      body: sellerBody({ pan: 'ABCCE1234F' }),
     });
     assert.equal(res.status, 400);
+    const body = (await res.json()) as { details?: Record<string, string> };
+    assert.equal(body.details?.['pan'], 'not_individual');
+  });
+
+  it('lets one PAN register exactly one seller', async () => {
+    const shared = sellerBody({ fullName: 'Kavya Kapoor' });
+
+    const first = await request(app, 'POST', '/v1/sellers', {
+      token: await signUp(),
+      body: shared,
+    });
+    assert.equal(first.status, 201);
+
+    // A different account, different mobile, the same identity numbers.
+    const second = await request(app, 'POST', '/v1/sellers', {
+      token: await signUp(),
+      body: { ...shared, mobile: '9876500001' },
+    });
+    assert.equal(second.status, 409, 'a PAN registered twice');
+  });
+});
+
+describe('publishing waits for admin approval', () => {
+  it('refuses to publish for a seller who is not yet approved', async () => {
+    const token = await signUp();
+    await becomeSeller(token);
+    const created = await createListing(token);
+    assert.equal(created.status, 201);
+    const { listing } = (await created.json()) as { listing: { id: string } };
+
+    const res = await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token });
+    assert.equal(res.status, 403, 'an unapproved seller published');
+
+    // The listing is still a draft, not half-published.
+    const after = await request(app, 'GET', `/v1/listings/${listing.id}`, { token });
+    const body = (await after.json()) as { listing: { state: string } };
+    assert.equal(body.listing.state, 'draft');
+  });
+
+  it('lets an approved seller publish, without any cap on how many', async () => {
+    const token = await signUp();
+    const sellerId = await becomeSeller(token);
+    await approveSeller(pg, sellerId);
+
+    // Comfortably past the old limit of ten.
+    for (let i = 0; i < 12; i += 1) {
+      const created = await createListing(token, {
+        serial: `9AB ${String(100000 + i).padStart(6, '0')}`,
+      });
+      assert.equal(created.status, 201, `listing ${i} was refused`);
+      const { listing } = (await created.json()) as { listing: { id: string } };
+
+      const published = await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token });
+      assert.equal(published.status, 200, `publish ${i} was refused`);
+    }
+
+    const live = await request(app, 'GET', '/v1/listings?limit=50');
+    const body = (await live.json()) as { listings: unknown[] };
+    assert.equal(body.listings.length, 12);
+  });
+
+  it('still lets an unapproved seller draft, so they can prepare', async () => {
+    const token = await signUp();
+    await becomeSeller(token);
+    for (let i = 0; i < 3; i += 1) {
+      const created = await createListing(token, {
+        serial: `7CD ${String(200000 + i).padStart(6, '0')}`,
+      });
+      assert.equal(created.status, 201);
+    }
   });
 });
 
@@ -247,7 +384,7 @@ describe('serial uniqueness', () => {
 describe('publishing', () => {
   it('moves a draft to minted', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     const created = (await (await createListing(token)).json()) as { listing: { id: string } };
 
     const res = await request(app, 'POST', `/v1/listings/${created.listing.id}/publish`, { token });
@@ -257,7 +394,7 @@ describe('publishing', () => {
 
   it('refuses to publish twice', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     const created = (await (await createListing(token)).json()) as { listing: { id: string } };
     await request(app, 'POST', `/v1/listings/${created.listing.id}/publish`, { token });
 
@@ -267,13 +404,13 @@ describe('publishing', () => {
 
   it("refuses to publish another seller's listing", async () => {
     const mine = await signUp('a@example.com');
-    await becomeSeller(mine);
+    await approvedSeller(mine);
     const created = (await (await createListing(mine)).json()) as { listing: { id: string } };
 
     const theirs = await signUp('b@example.com');
     await request(app, 'POST', '/v1/sellers', {
       token: theirs,
-      body: { kind: 'individual', displayName: 'Someone Else' },
+      body: sellerBody({ fullName: 'Someone Else' }),
     });
 
     const res = await request(app, 'POST', `/v1/listings/${created.listing.id}/publish`, {
@@ -294,7 +431,7 @@ describe('find my date', () => {
 
   it('finds an exact date match', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     await publishedListing(token, '3UT 150847');
 
     const res = await request(app, 'GET', '/v1/listings?date=1947-08-15');
@@ -310,7 +447,7 @@ describe('find my date', () => {
 
   it('separates same day-and-month in another year', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     await publishedListing(token, '3UT 150847');
     await publishedListing(token, '4FZ 150892', 500);
 
@@ -322,7 +459,7 @@ describe('find my date', () => {
 
   it('does not surface unpublished drafts', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     await createListing(token, { serial: '3UT 150847' }); // left as draft
 
     const res = await request(app, 'GET', '/v1/listings?date=1947-08-15');
@@ -345,7 +482,7 @@ describe('find my date', () => {
 describe('reading a listing', () => {
   it('returns the serial, dates and patterns together', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     const created = (await (await createListing(token)).json()) as { listing: { id: string } };
     await request(app, 'POST', `/v1/listings/${created.listing.id}/publish`, { token });
 
@@ -375,7 +512,7 @@ describe('reading a listing', () => {
 
   it('hides another seller draft from the public', async () => {
     const token = await signUp();
-    await becomeSeller(token);
+    await approvedSeller(token);
     const created = (await (await createListing(token)).json()) as { listing: { id: string } };
 
     const res = await request(app, 'GET', `/v1/listings/${created.listing.id}`);

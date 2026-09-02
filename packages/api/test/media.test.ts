@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { createRig, reset, TEST_IP } from './helpers.ts';
+import { approveSeller, createRig, reset, sellerBody, TEST_IP } from './helpers.ts';
 import type { App } from '../src/app.ts';
 
 /**
@@ -57,7 +57,7 @@ async function seller(email: string): Promise<string> {
     new Request('http://api.test/v1/sellers', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ kind: 'individual', displayName: 'S' }),
+      body: JSON.stringify(sellerBody({ fullName: 'Sunil Kapoor' })),
     }),
     TEST_IP,
   );

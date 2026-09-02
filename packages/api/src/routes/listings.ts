@@ -16,7 +16,7 @@ import { json } from '../http.ts';
 import { badRequest, conflict, forbidden, notFound } from '../errors.ts';
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { PG_UNIQUE_VIOLATION, one, pgConstraint, pgErrorCode, type Database } from '../db.ts';
-import { requireSeller } from './sellers.ts';
+import { requireApprovedSeller, requireSeller } from './sellers.ts';
 
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 
@@ -258,7 +258,10 @@ export function registerListingRoutes(router: Router, database: Database): void 
 
   /** POST /v1/listings/:id/publish — draft → minted. */
   router.add('POST', '/v1/listings/:id/publish', async (ctx) => {
-    const seller = await requireSeller(ctx);
+    // Approval is the gate, and it is here rather than at creation: a seller
+    // awaiting review can draft as much as they like, but nothing of theirs
+    // reaches a buyer until an admin has approved them.
+    const seller = await requireApprovedSeller(ctx);
     const id = ctx.params['id'] ?? '';
 
     const found = await ctx.db.query<{ seller_id: string; state: string; price_paise: string | null }>(

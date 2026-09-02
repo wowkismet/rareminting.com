@@ -7,6 +7,8 @@
  * append-only at the database level rather than by convention.
  */
 
+import { maskMobile } from '@rareminting/config';
+
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
 import { badRequest, forbidden, notFound, unauthorized } from '../errors.ts';
@@ -106,6 +108,9 @@ export function registerAdminRoutes(router: Router): void {
     await requireAdmin(ctx);
     const state = ctx.url.searchParams.get('kycState');
 
+    // Enough to decide on, and no more. The last four characters of a PAN and
+    // of an Aadhaar let an admin confirm the card a seller reads out over the
+    // phone; the numbers themselves are not stored and cannot be shown here.
     const rows = await ctx.db.query<{
       id: string;
       display_name: string;
@@ -114,14 +119,29 @@ export function registerAdminRoutes(router: Router): void {
       is_minting_verified: boolean;
       gstin: string | null;
       email: string;
+      email_verified: boolean;
+      phone_e164: string | null;
+      phone_verified: boolean;
+      pan_last4: string | null;
+      pan_name_match: string | null;
+      aadhaar_last4: string | null;
       created_at: string;
       listing_count: string;
     }>(
       `select s.id, s.display_name, s.kind, s.kyc_state, s.is_minting_verified,
-              s.gstin, u.email, s.created_at::text as created_at,
+              s.gstin, u.email,
+              (u.email_verified_at is not null) as email_verified,
+              u.phone_e164,
+              (u.phone_verified_at is not null) as phone_verified,
+              p.number_last4 as pan_last4,
+              p.name_match_score::text as pan_name_match,
+              a.number_last4 as aadhaar_last4,
+              s.created_at::text as created_at,
               (select count(*) from listings l where l.seller_id = s.id)::text as listing_count
          from sellers s
          join users u on u.id = s.user_id
+         left join kyc_documents p on p.seller_id = s.id and p.kind = 'pan'
+         left join kyc_documents a on a.seller_id = s.id and a.kind = 'aadhaar_offline_xml'
         where ($1::text is null or s.kyc_state = $1::kyc_state)
         order by s.created_at asc
         limit 100`,
@@ -137,6 +157,14 @@ export function registerAdminRoutes(router: Router): void {
         mintingVerified: r.is_minting_verified,
         gstin: r.gstin,
         email: r.email,
+        emailVerified: r.email_verified,
+        mobile: r.phone_e164 === null ? null : maskMobile(r.phone_e164),
+        mobileVerified: r.phone_verified,
+        panLast4: r.pan_last4,
+        // 1 when the PAN's surname initial appears in the name given, 0 when
+        // it does not. A mismatch is worth a second look, not a rejection.
+        panNameAgrees: r.pan_name_match === null ? null : Number(r.pan_name_match) >= 1,
+        aadhaarMasked: r.aadhaar_last4 === null ? null : `XXXX XXXX ${r.aadhaar_last4}`,
         listingCount: Number(r.listing_count),
         createdAt: r.created_at,
       })),
@@ -164,16 +192,17 @@ export function registerAdminRoutes(router: Router): void {
     const before = one(existing);
     if (before === null) throw notFound('No such seller.');
 
-    // Verification is what unlocks the badge and a higher listing limit.
+    // Approval is what lets a seller publish at all, and it carries no
+    // ceiling: an approved seller lists as many items as they like.
     const verified = state === 'verified';
     await ctx.db.query(
       `update sellers
           set kyc_state = $2::kyc_state,
               kyc_verified_at = case when $3 then now() else null end,
-              is_minting_verified = $3,
-              listing_limit = case when $3 then greatest(listing_limit, 100) else listing_limit end
+              approved_by = case when $3 then $4::uuid else null end,
+              is_minting_verified = $3
         where id = $1`,
-      [id, state, verified],
+      [id, state, verified, actorId],
     );
 
     await audit(ctx, actorId, 'seller.kyc', 'seller', id, before, {

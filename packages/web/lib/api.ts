@@ -110,6 +110,7 @@ export interface ApiListing {
   title: string;
   state: string;
   saleMode?: string;
+  kind?: string;
   priceInr: number | null;
   grade: string | null;
   publishedAt: string | null;
@@ -120,6 +121,14 @@ export interface ApiListing {
     prefix: string | null;
     isStar: boolean;
     serialDigits: string;
+  };
+  collectible?: {
+    denomination: number | null;
+    yearOfIssue: number | null;
+    mintMark: string | null;
+    metal: string | null;
+    weightGrams: number | null;
+    catalogueRef: string | null;
   };
   imageUrl?: string | null;
   media?: { id: string; kind: string; url: string }[];

@@ -20,6 +20,26 @@ import { requireApprovedSeller, requireSeller } from './sellers.ts';
 
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 
+/** Matches the item_kind enum. A banknote takes a different path from the rest. */
+const ITEM_KINDS = [
+  'banknote',
+  'coin',
+  'stamp',
+  'bond',
+  'share_certificate',
+  'ephemera',
+  'other',
+] as const;
+
+const KIND_LABEL: Record<string, string> = {
+  coin: 'Coin',
+  stamp: 'Stamp',
+  bond: 'Bond',
+  share_certificate: 'Share certificate',
+  ephemera: 'Ephemera',
+  other: 'Collectible',
+};
+
 const OPEN_STATES = ['draft', 'pending_review', 'minted', 'reserved'] as const;
 
 /** Rupees in, paise out. Money is only ever stored as an integer minor unit. */
@@ -135,13 +155,28 @@ export function registerListingRoutes(router: Router, database: Database): void 
   /**
    * POST /v1/listings
    *
-   * Body: serial, denomination, series, grade, priceInr, plus optional title,
-   * description, signatory, yearOfIssue, insetLetter.
+   * A banknote needs a serial — reading it is the whole point — so `serial`,
+   * `denomination` and `series` are required for one. Anything else is a
+   * collectible: it needs a title and nothing more, because a coin has no
+   * serial number and demanding one would make coins unlistable.
+   *
+   * Body (banknote): serial, denomination, series, grade, priceInr, plus
+   * optional title, description, signatory, insetLetter.
+   * Body (coin and others): kind, title, priceInr, plus optional denomination,
+   * yearOfIssue, mintMark, metal, weightGrams, catalogueRef, grade,
+   * description.
    */
   router.add('POST', '/v1/listings', async (ctx) => {
     const seller = await requireSeller(ctx);
 
     const fields = asObject(await ctx.body());
+
+    // Default to banknote: every existing caller omits `kind` and means one.
+    const kind = fields['kind'] === undefined ? 'banknote' : oneOf(fields, 'kind', ITEM_KINDS);
+    if (kind !== 'banknote') {
+      return createCollectible(database, seller.id, kind, fields);
+    }
+
     const serialInput = requiredString(fields, 'serial', 64);
     const denomination = positiveInt(fields, 'denomination');
     const series = requiredString(fields, 'series', 120);
@@ -445,6 +480,20 @@ export function registerListingRoutes(router: Router, database: Database): void 
       if (one(seller)?.id !== listing.seller_id) return null;
     }
 
+    const collectibleResult = await ctx.db.query<{
+      denomination: number | null;
+      year_of_issue: number | null;
+      mint_mark: string | null;
+      metal: string | null;
+      weight_grams: string | null;
+      catalogue_ref: string | null;
+    }>(
+      `select denomination, year_of_issue, mint_mark, metal,
+              weight_grams::text as weight_grams, catalogue_ref
+         from collectibles where listing_id = $1`,
+      [id],
+    );
+
     const noteResult = await ctx.db.query<NoteRow>(
       `select denomination, series, prefix, is_star, serial_digits, digit_count
          from notes where listing_id = $1`,
@@ -492,6 +541,21 @@ export function registerListingRoutes(router: Router, database: Database): void 
     return {
       listing: {
         ...publicListing(listing, one(noteResult), null, null),
+        ...(one(collectibleResult) === null
+          ? {}
+          : {
+              collectible: (() => {
+                const c = one(collectibleResult)!;
+                return {
+                  denomination: c.denomination,
+                  yearOfIssue: c.year_of_issue,
+                  mintMark: c.mint_mark,
+                  metal: c.metal,
+                  weightGrams: c.weight_grams === null ? null : Number(c.weight_grams),
+                  catalogueRef: c.catalogue_ref,
+                };
+              })(),
+            }),
         patterns: tagResult.rows.map((t) => ({
           code: t.code,
           label: t.label,
@@ -526,4 +590,107 @@ function summariseTags(
 function exactly<T>(value: T | undefined): T {
   if (value === undefined) throw new Error('expected a row');
   return value;
+}
+
+/**
+ * Create a coin or other collectible.
+ *
+ * Deliberately undemanding compared with a banknote. There is no serial to
+ * parse, no dates to derive and no pattern to tag, so the only thing genuinely
+ * required is a title and a price — everything else describes the item and is
+ * optional, because a seller listing a hundred-year-old token may not know its
+ * weight or its catalogue reference and should not be blocked on either.
+ */
+async function createCollectible(
+  database: Database,
+  sellerId: string,
+  kind: string,
+  fields: Record<string, unknown>,
+): Promise<Response> {
+  const pricePaise = toPaise(fields, 'priceInr');
+  const grade = fields['grade'] === undefined ? null : oneOf(fields, 'grade', GRADES);
+  const description = optionalString(fields, 'description', 4000);
+  const mintMark = optionalString(fields, 'mintMark', 16);
+  const metal = optionalString(fields, 'metal', 60);
+  const catalogueRef = optionalString(fields, 'catalogueRef', 60);
+
+  const denomination =
+    fields['denomination'] === undefined || fields['denomination'] === null
+      ? null
+      : positiveInt(fields, 'denomination');
+
+  let yearOfIssue: number | null = null;
+  if (fields['yearOfIssue'] !== undefined && fields['yearOfIssue'] !== null) {
+    const value = fields['yearOfIssue'];
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1600 || value > 2100) {
+      throw badRequest('Year of issue must be a whole year between 1600 and 2100.', {
+        yearOfIssue: 'invalid',
+      });
+    }
+    yearOfIssue = value;
+  }
+
+  let weightGrams: number | null = null;
+  if (fields['weightGrams'] !== undefined && fields['weightGrams'] !== null) {
+    const value = fields['weightGrams'];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw badRequest('Weight must be a positive number of grams.', { weightGrams: 'invalid' });
+    }
+    weightGrams = value;
+  }
+
+  // A title the seller gave, or one built from what they did tell us.
+  const title =
+    optionalString(fields, 'title', 200) ??
+    [
+      yearOfIssue === null ? null : String(yearOfIssue),
+      denomination === null ? null : `₹${denomination}`,
+      KIND_LABEL[kind] ?? 'Collectible',
+      metal,
+    ]
+      .filter((part): part is string => part !== null && part !== '')
+      .join(' ');
+
+  if (title.trim().length === 0) {
+    throw badRequest('Give this item a title so buyers know what it is.', { title: 'required' });
+  }
+
+  const created = await database.transaction(async (tx) => {
+    const listingResult = await tx.query<ListingRow>(
+      `insert into listings
+         (seller_id, kind, title, description, state, sale_mode, price_paise, grade)
+       values ($1, $2::item_kind, $3, $4, 'draft', 'fixed', $5, $6)
+       returning id, seller_id, kind, title, description, state, sale_mode,
+                 price_paise, grade, published_at, created_at`,
+      [sellerId, kind, title, description, pricePaise, grade],
+    );
+    const listing = listingResult.rows[0];
+    if (listing === undefined) throw new Error('failed to create listing');
+
+    await tx.query(
+      `insert into collectibles
+         (listing_id, denomination, year_of_issue, mint_mark, metal, weight_grams, catalogue_ref)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [listing.id, denomination, yearOfIssue, mintMark, metal, weightGrams, catalogueRef],
+    );
+
+    return listing;
+  });
+
+  return json(
+    {
+      listing: {
+        ...publicListing(created, null, null, null),
+        collectible: {
+          denomination,
+          yearOfIssue,
+          mintMark,
+          metal,
+          weightGrams,
+          catalogueRef,
+        },
+      },
+    },
+    201,
+  );
 }

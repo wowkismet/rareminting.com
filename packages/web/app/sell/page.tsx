@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import { createListing, registerSeller } from '@/app/actions.ts';
+import { createCollectible, createListing, registerSeller } from '@/app/actions.ts';
 import { ActionForm, Field, Select } from '@/components/Forms.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
@@ -11,6 +11,15 @@ export const metadata: Metadata = { title: 'Sell a note' };
 export const dynamic = 'force-dynamic';
 
 const DENOMINATIONS = [10, 20, 50, 100, 200, 500, 2000];
+
+const ITEM_KINDS = [
+  { value: 'coin', label: 'Coin' },
+  { value: 'stamp', label: 'Stamp' },
+  { value: 'bond', label: 'Bond' },
+  { value: 'share_certificate', label: 'Share certificate' },
+  { value: 'ephemera', label: 'Ephemera' },
+  { value: 'other', label: 'Something else' },
+] as const;
 
 const GRADES = [
   { value: 'UNC', label: 'UNC — uncirculated' },
@@ -174,6 +183,73 @@ export default async function SellPage() {
               />
               <Field label="Anything else worth knowing" name="description" />
             </ActionForm>
+
+            {/* Coins and everything else. Kept as a separate form rather than a
+                toggle, because the two have almost no fields in common and a
+                form that rearranged itself would be worse than two clear ones. */}
+            <div className="mt-4 border-t border-sand-line pt-10">
+              <h2 className="font-display text-2xl text-slate">
+                Or list a coin or other collectible
+              </h2>
+              <p className="mt-2 mb-6 text-sm leading-relaxed text-slate-dim">
+                A coin has no serial number, so there is nothing to read for dates — only a title
+                and a price are required. Everything else describes the piece, and you can leave
+                out anything you do not know.
+              </p>
+
+              <ActionForm action={createCollectible} submitLabel="Create listing">
+                <Select label="What is it" name="kind" options={ITEM_KINDS} defaultValue="coin" />
+                <Field
+                  label="Title"
+                  name="title"
+                  required
+                  placeholder="1947 One Rupee"
+                  hint="What a buyer would search for."
+                />
+                <Field
+                  label="Price in rupees"
+                  name="priceInr"
+                  type="number"
+                  required
+                  placeholder="1200"
+                />
+                <Field
+                  label="Year of issue"
+                  name="yearOfIssue"
+                  type="number"
+                  placeholder="1947"
+                  hint="The year it was struck or issued."
+                />
+                <Field
+                  label="Face value in rupees"
+                  name="denomination"
+                  type="number"
+                  placeholder="1"
+                  hint="Leave blank for a medal or token with no face value."
+                />
+                <Field label="Metal" name="metal" placeholder="Nickel, silver, copper…" />
+                <Field
+                  label="Mint mark"
+                  name="mintMark"
+                  placeholder="B, C, ◆, ★"
+                  hint="Bombay a diamond, Calcutta none or a dot, Hyderabad a star."
+                />
+                <Field
+                  label="Weight in grams"
+                  name="weightGrams"
+                  type="number"
+                  placeholder="11.66"
+                />
+                <Field
+                  label="Catalogue reference"
+                  name="catalogueRef"
+                  placeholder="KM#559"
+                  hint="A standard reference lets a buyer look the type up independently."
+                />
+                <Select label="Condition" name="grade" options={GRADES} defaultValue="XF" />
+                <Field label="Anything else worth knowing" name="description" />
+              </ActionForm>
+            </div>
           </>
         )}
       </main>

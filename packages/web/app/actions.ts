@@ -384,3 +384,74 @@ export async function holdPayout(data: FormData): Promise<void> {
   await api(`/v1/admin/payouts/${payoutId}/hold`, { method: 'POST', token, body: { reason } });
   revalidatePath('/admin/payouts');
 }
+
+/**
+ * List a coin or other collectible.
+ *
+ * Separate from createListing because almost nothing is shared: there is no
+ * serial to send, and every descriptive field is optional. Folding both into
+ * one handler would mean a thicket of conditionals over two unrelated shapes.
+ */
+export async function createCollectible(
+  _prev: FormState,
+  data: FormData,
+): Promise<FormState> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const kind = text(data, 'kind');
+  const title = text(data, 'title');
+  const priceInr = Number(text(data, 'priceInr'));
+  const grade = text(data, 'grade');
+  const metal = text(data, 'metal');
+  const mintMark = text(data, 'mintMark');
+  const catalogueRef = text(data, 'catalogueRef');
+  const description = text(data, 'description');
+
+  const denominationRaw = text(data, 'denomination');
+  const yearRaw = text(data, 'yearOfIssue');
+  const weightRaw = text(data, 'weightGrams');
+
+  if (title === '') return { error: 'Give this item a title.', field: 'title' };
+  if (!Number.isFinite(priceInr) || priceInr <= 0) {
+    return { error: 'Enter a price in rupees.', field: 'priceInr' };
+  }
+
+  const optionalNumber = (raw: string): number | undefined => {
+    if (raw === '') return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+
+  const result = await api<{ listing: ApiListing }>('/v1/listings', {
+    method: 'POST',
+    token,
+    body: {
+      kind: kind === '' ? 'coin' : kind,
+      title,
+      priceInr,
+      ...(grade === '' ? {} : { grade }),
+      ...(metal === '' ? {} : { metal }),
+      ...(mintMark === '' ? {} : { mintMark }),
+      ...(catalogueRef === '' ? {} : { catalogueRef }),
+      ...(description === '' ? {} : { description }),
+      ...(optionalNumber(denominationRaw) === undefined
+        ? {}
+        : { denomination: optionalNumber(denominationRaw) }),
+      ...(optionalNumber(yearRaw) === undefined
+        ? {}
+        : { yearOfIssue: optionalNumber(yearRaw) }),
+      ...(optionalNumber(weightRaw) === undefined
+        ? {}
+        : { weightGrams: optionalNumber(weightRaw) }),
+    },
+  });
+
+  if (!result.ok) {
+    const field = result.error.details ? Object.keys(result.error.details)[0] : null;
+    return { error: result.error.message, field: field ?? null };
+  }
+
+  revalidatePath('/seller');
+  redirect(`/listing/${result.data.listing.id}`);
+}

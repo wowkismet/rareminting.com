@@ -92,6 +92,46 @@ export default async function ListingPage({
           </div>
         )}
 
+        {/* A coin has no serial plate, so its attributes take that place. */}
+        {listing.collectible !== undefined && (
+          <div className="rounded-sm border border-sand-line bg-sand-raised px-6 py-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
+              {listing.kind === 'coin' ? 'The coin' : 'The piece'}
+            </p>
+            <dl className="mt-4 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
+              {(
+                [
+                  ['Year of issue', listing.collectible.yearOfIssue],
+                  [
+                    'Face value',
+                    listing.collectible.denomination === null
+                      ? null
+                      : `₹${listing.collectible.denomination}`,
+                  ],
+                  ['Metal', listing.collectible.metal],
+                  ['Mint mark', listing.collectible.mintMark],
+                  [
+                    'Weight',
+                    listing.collectible.weightGrams === null
+                      ? null
+                      : `${listing.collectible.weightGrams} g`,
+                  ],
+                  ['Catalogue', listing.collectible.catalogueRef],
+                ] as const
+              )
+                .filter(([, value]) => value !== null && value !== '')
+                .map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
+                      {label}
+                    </dt>
+                    <dd className="mt-1 text-slate">{value}</dd>
+                  </div>
+                ))}
+            </dl>
+          </div>
+        )}
+
         <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">

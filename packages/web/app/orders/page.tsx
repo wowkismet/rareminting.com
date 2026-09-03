@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { respondToOffer } from '@/app/actions.ts';
-import { SiteHeader } from '@/components/SiteHeader.tsx';
-import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
+import { viewerMenu } from '@/lib/viewer-menu.ts';
 
 export const metadata: Metadata = { title: 'Orders & offers' };
 export const dynamic = 'force-dynamic';
@@ -50,24 +50,30 @@ export default async function OrdersPage() {
   if (user === null) redirect('/signin');
   const token = await sessionToken();
 
-  const ordersResult = await api<{ orders: Order[] }>('/v1/orders', { token });
-  const offersResult = await api<{ offers: Offer[] }>('/v1/offers', { token });
+  const [ordersResult, offersResult, sections] = await Promise.all([
+    api<{ orders: Order[] }>('/v1/orders', { token }),
+    api<{ offers: Offer[] }>('/v1/offers', { token }),
+    viewerMenu(),
+  ]);
 
   const orders = ordersResult.ok ? ordersResult.data.orders : [];
   const offers = offersResult.ok ? offersResult.data.offers : [];
   const openReceived = offers.filter((o) => o.role === 'seller' && o.state === 'open');
 
   return (
-    <div>
-      <SiteHeader user={user} compact />
-
-      <main className="mx-auto flex max-w-4xl flex-col gap-10 px-5 py-14">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-            The Vault
-          </p>
-          <h1 className="mt-2 font-display text-3xl text-slate">Orders &amp; offers</h1>
-        </div>
+    <DashboardShell
+      user={user}
+      eyebrow="The Vault"
+      title="Orders & offers"
+      subtitle={
+        openReceived.length === 0
+          ? undefined
+          : `${openReceived.length} offer${openReceived.length === 1 ? '' : 's'} awaiting your answer`
+      }
+      sections={sections}
+      current="/orders"
+    >
+      <div className="flex max-w-4xl flex-col gap-10">
 
         {openReceived.length > 0 && (
           <section>
@@ -181,9 +187,7 @@ export default async function OrdersPage() {
             </ul>
           </section>
         )}
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

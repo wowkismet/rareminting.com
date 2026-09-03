@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import { PayButton } from '@/components/PayButton.tsx';
-import { SiteHeader } from '@/components/SiteHeader.tsx';
-import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
+import { viewerMenu } from '@/lib/viewer-menu.ts';
 
 export const metadata: Metadata = { title: 'Order', robots: { index: false, follow: false } };
 export const dynamic = 'force-dynamic';
@@ -50,22 +50,25 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   if (user === null) redirect('/signin');
   const token = await sessionToken();
 
-  const result = await api<{ order: OrderDetail }>(`/v1/orders/${id}`, { token });
+  const [result, sections] = await Promise.all([
+    api<{ order: OrderDetail }>(`/v1/orders/${id}`, { token }),
+    viewerMenu(),
+  ]);
   if (!result.ok) notFound();
   const order = result.data.order;
   const isSeller = order.role === 'seller';
 
   return (
-    <div>
-      <SiteHeader user={user} compact />
-
-      <main className="mx-auto flex max-w-2xl flex-col gap-8 px-5 py-14">
+    <DashboardShell
+      user={user}
+      eyebrow={order.orderNumber}
+      title={order.title}
+      sections={sections}
+      current="/orders"
+    >
+      <div className="flex max-w-2xl flex-col gap-8">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-            {order.orderNumber}
-          </p>
-          <h1 className="mt-2 font-display text-3xl text-slate">{order.title}</h1>
-          <p className="mt-2 text-sm text-slate-dim">
+          <p className="text-sm text-slate-dim">
             {isSeller ? 'You are the seller' : 'You are the buyer'}
             {order.serialDigits !== null && (
               <> · serial <span className="font-mono text-slate">{order.serialDigits}</span></>
@@ -144,9 +147,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         <a href="/orders" className="text-sm text-accent-deep underline underline-offset-4">
           Back to orders
         </a>
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </DashboardShell>
   );
 }

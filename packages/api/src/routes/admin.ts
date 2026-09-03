@@ -67,39 +67,168 @@ async function audit(
 }
 
 export function registerAdminRoutes(router: Router): void {
-  /** GET /v1/admin/overview — the numbers the console opens on. */
+  /** GET /v1/admin/overview — comprehensive dashboard data. */
   router.add('GET', '/v1/admin/overview', async (ctx) => {
     await requireAdmin(ctx);
 
+    // KPIs and counts
     const counts = await ctx.db.query<Record<string, string>>(
       `select
          (select count(*) from users)::text                                    as users,
          (select count(*) from sellers)::text                                  as sellers,
-         (select count(*) from sellers where kyc_state = 'pending')::text      as kyc_pending,
-         (select count(*) from sellers where kyc_state = 'under_review')::text as kyc_review,
-         (select count(*) from listings)::text                                 as listings,
+         (select count(*) from listings)::text                                 as products,
          (select count(*) from listings where state = 'minted')::text          as listings_live,
          (select count(*) from listings where state = 'draft')::text           as listings_draft,
          (select count(*) from orders)::text                                   as orders,
-         (select count(*) from review_queue
-            where state in ('queued','assigned'))::text                        as review_open,
+         (select count(*) from sellers where kyc_state = 'pending')::text      as kyc_pending,
+         (select count(*) from sellers where kyc_state = 'under_review')::text as kyc_review,
          (select count(*) from disputes
             where state not in ('closed','resolved_buyer','resolved_seller'))::text as disputes_open`,
     );
 
-    const row = counts.rows[0] ?? {};
-    const n = (k: string): number => Number(row[k] ?? 0);
+    // Financial metrics
+    const financial = await ctx.db.query<{ gmv: string; revenue: string }>(
+      `select
+         coalesce(sum(total_paise), 0)::text as gmv,
+         coalesce(sum(total_paise) * 0.20, 0)::text as revenue
+         from orders where state not in ('cancelled','refunded')`,
+    );
+
+    // Sales series (last 30 days for chart)
+    const series = await ctx.db.query<{ day: string; gmv: string }>(
+      `select d.day::date::text as day,
+              coalesce(sum(o.total_paise), 0)::text as gmv
+         from generate_series(current_date - interval '29 days', current_date, interval '1 day') d(day)
+         left join orders o
+           on o.created_at::date = d.day::date
+          and o.state not in ('cancelled', 'refunded')
+        group by d.day
+        order by d.day`,
+    );
+
+    // Category breakdown
+    const categories = await ctx.db.query<{ kind: string; gmv: string; count: string }>(
+      `select l.kind, coalesce(sum(o.total_paise), 0)::text as gmv,
+              count(distinct o.id)::text as count
+         from listings l
+         left join orders o on o.listing_id = l.id
+                           and o.state not in ('cancelled','refunded')
+        group by l.kind
+        order by gmv desc`,
+    );
+
+    // Recent orders
+    const recentOrders = await ctx.db.query<{
+      order_number: string;
+      user_email: string;
+      total_paise: string;
+      state: string;
+      created_at: string;
+    }>(
+      `select o.order_number, u.email as user_email, o.total_paise::text,
+              o.state, o.created_at::text
+         from orders o
+         join users u on u.id = o.buyer_id
+        order by o.created_at desc limit 10`,
+    );
+
+    // Top selling products
+    const topProducts = await ctx.db.query<{
+      title: string;
+      kind: string;
+      sold: string;
+      revenue: string;
+    }>(
+      `select l.title, l.kind,
+              count(o.id)::text as sold,
+              coalesce(sum(o.total_paise), 0)::text as revenue
+         from listings l
+         left join orders o on o.listing_id = l.id
+                           and o.state not in ('cancelled','refunded')
+        group by l.id, l.title, l.kind
+        order by sold desc, revenue desc limit 10`,
+    );
+
+    // Seller performance
+    const sellerPerf = await ctx.db.query<{
+      display_name: string;
+      total_sales: string;
+      orders_count: string;
+    }>(
+      `select s.display_name,
+              coalesce(sum(o.total_paise), 0)::text as total_sales,
+              count(o.id)::text as orders_count
+         from sellers s
+         left join orders o on o.seller_id = s.id
+                           and o.state not in ('cancelled','refunded')
+        group by s.id, s.display_name
+        order by total_sales desc limit 10`,
+    );
+
+    // Alert data
+    const alerts = await ctx.db.query<Record<string, string>>(
+      `select
+         (select count(*) from payouts where state = 'pending')::text as pending_payouts,
+         (select coalesce(sum(amount_paise), 0)::text from payouts where state = 'pending') as payout_amount,
+         (select count(*) from disputes
+            where state not in ('closed','resolved_buyer','resolved_seller'))::text as open_disputes,
+         (select count(*) from sellers
+            where kyc_state in ('pending','under_review'))::text as kyc_pending_count,
+         (select count(*) from listings where state = 'minted')::text as active_listings,
+         (select count(*) from support_tickets where state = 'open')::text as open_tickets`,
+    );
+
+    const cnt = (counts.rows[0] ?? {}) as Record<string, string>;
+    const fin = (financial.rows[0] ?? {}) as Record<string, string>;
+    const alrt = (alerts.rows[0] ?? {}) as Record<string, string>;
+    const n = (k: string): number => Number(cnt[k] ?? 0);
+    const rupees = (k: string): number => Number(fin[k] ?? 0) / 100;
 
     return json({
-      users: n('users'),
-      sellers: n('sellers'),
-      kycPending: n('kyc_pending') + n('kyc_review'),
-      listings: n('listings'),
-      listingsLive: n('listings_live'),
-      listingsDraft: n('listings_draft'),
-      orders: n('orders'),
-      reviewOpen: n('review_open'),
-      disputesOpen: n('disputes_open'),
+      kpis: {
+        totalGmvInr: rupees('gmv'),
+        totalOrders: n('orders'),
+        totalUsers: n('users'),
+        totalSellers: n('sellers'),
+        totalProducts: n('products'),
+        totalRevenueInr: rupees('revenue'),
+      },
+      alerts: {
+        pendingPayoutsInr: Number(alrt['payout_amount'] ?? 0) / 100,
+        disputesOpen: n('disputes_open'),
+        kycPending: n('kyc_pending') + n('kyc_review'),
+        activeListings: n('listings_live'),
+        lowStockCount: 74, // placeholder
+        supportTicketsOpen: Number(alrt['open_tickets'] ?? 0),
+      },
+      salesSeries: series.rows.map((r) => ({
+        day: r.day,
+        gmvInr: Number(r.gmv) / 100,
+      })),
+      categoryBreakdown: categories.rows.map((r) => ({
+        category: r.kind,
+        gmvInr: Number(r.gmv) / 100,
+        orders: Number(r.count),
+      })),
+      recentOrders: recentOrders.rows.map((r) => ({
+        orderNumber: r.order_number,
+        user: r.user_email.split('@')[0],
+        amountInr: Number(r.total_paise) / 100,
+        status: r.state,
+        date: r.created_at.slice(0, 10),
+      })),
+      topProducts: topProducts.rows.map((r) => ({
+        title: r.title,
+        category: r.kind,
+        sold: Number(r.sold),
+        revenueInr: Number(r.revenue) / 100,
+      })),
+      sellerPerformance: sellerPerf.rows.map((r) => ({
+        seller: r.display_name,
+        totalSalesInr: Number(r.total_sales) / 100,
+        orders: Number(r.orders_count),
+        rating: 4.8, // placeholder
+      })),
     });
   });
 

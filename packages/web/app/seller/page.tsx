@@ -1,22 +1,39 @@
 import type { Metadata } from 'next';
 
-import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
+import { DashboardShell, Empty } from '@/components/DashboardShell.tsx';
+import {
+  CategoryDonut,
+  Panel,
+  QuickActions,
+  SalesChart,
+  StatCard,
+} from '@/components/DashboardPanels.tsx';
 import { ItemRow } from '@/components/ItemRow.tsx';
-import { loadSeller, rupees, sellerMenu } from '@/lib/seller-dashboard.ts';
+import { loadSeller, rupees, sellerMenu, STATE_LABEL } from '@/lib/seller-dashboard.ts';
 
 export const metadata: Metadata = { title: 'Seller dashboard' };
 export const dynamic = 'force-dynamic';
 
-/**
- * The seller's own page.
- *
- * One request to /v1/sellers/me/dashboard draws the whole thing, so the page
- * does not fan out into a waterfall on the view a seller opens most.
- */
+const ORDER_TONE: Record<string, string> = {
+  payment_pending: 'text-ember',
+  paid: 'text-accent-deep',
+  shipped: 'text-accent-deep',
+  delivered: 'text-accent-deep',
+  completed: 'text-slate-dim',
+  cancelled: 'text-slate-dim',
+};
 
+/**
+ * The seller's console.
+ *
+ * One request draws the whole thing — the counts, the thirty-day series, the
+ * recent orders, the best sellers and the payout balances all come back
+ * together, so the page a seller opens most does not assemble itself through a
+ * waterfall of round trips.
+ */
 export default async function SellerDashboardPage() {
   const { user, data } = await loadSeller();
-  const { seller, stats, listings } = data;
+  const { seller, stats, listings, salesSeries, recentOrders, topListings, payouts } = data;
   const needsPhotos = listings.filter((l) => l.photoCount === 0);
 
   return (
@@ -24,39 +41,12 @@ export default async function SellerDashboardPage() {
       user={user}
       eyebrow="The Mint"
       title="Seller dashboard"
-      subtitle={`Selling as ${seller.displayName}`}
+      subtitle={`Manage your listings, orders and payouts · ${seller.displayName}`}
       sections={sellerMenu(data)}
       current="/seller"
-      action={{ href: '/sell', label: 'List something new' }}
+      action={{ href: '/sell', label: 'Add new listing' }}
     >
-      <div className="flex flex-col gap-10">
-        <div className="flex flex-wrap gap-3">
-          <a
-            href="/sell"
-            className="rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-secondary"
-          >
-            List a banknote
-          </a>
-          <a
-            href="/sell#collectible"
-            className="rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
-          >
-            List a coin or collectible
-          </a>
-          <a
-            href="/sell?mode=auction"
-            className="rounded-full border border-accent-deep/50 bg-accent-deep/10 px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
-          >
-            List for auction
-          </a>
-          <a
-            href="/seller/auctions"
-            className="rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
-          >
-            My auctions
-          </a>
-        </div>
-
+      <div className="flex flex-col gap-6">
         {!seller.approved && (
           <div className="rounded-sm border border-accent-deep/40 bg-sand-raised p-5">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent-deep">
@@ -70,67 +60,161 @@ export default async function SellerDashboardPage() {
           </div>
         )}
 
-        <section>
-          <h2 className="mb-4 font-display text-xl text-slate">Listings</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-            <Tile label="Total listed" value={String(stats.listings.total)} />
-            <Tile label="Live now" value={String(stats.listings.live)} accent />
-            <Tile label="Drafts" value={String(stats.listings.draft)} hint="not yet published" />
-            <Tile label="Sold" value={String(stats.listings.sold)} />
-            <Tile label="Views" value={stats.views.toLocaleString('en-IN')} hint="excludes your own" />
-          </div>
-          <p className="mt-3 text-xs text-slate-dim">
-            {stats.byKind.notes} banknote{stats.byKind.notes === 1 ? '' : 's'} ·{' '}
-            {stats.byKind.coins} coin{stats.byKind.coins === 1 ? '' : 's'} · {stats.byKind.other}{' '}
-            other collectible{stats.byKind.other === 1 ? '' : 's'}
-          </p>
-        </section>
+        {/* Headline figures */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Total sales"
+            value={rupees(stats.sales.grossInr)}
+            hint="payments that have cleared"
+            accent
+          />
+          <StatCard label="Total orders" value={String(stats.sales.orders)} hint="all time" />
+          <StatCard
+            label="Active listings"
+            value={String(stats.listings.live)}
+            hint={`${stats.listings.draft} draft${stats.listings.draft === 1 ? '' : 's'}`}
+          />
+          <StatCard
+            label="Pending orders"
+            value={String(stats.sales.awaitingPayment + stats.sales.awaitingDispatch)}
+            hint="awaiting payment or dispatch"
+          />
+        </div>
 
-        <section>
-          <h2 className="mb-4 font-display text-xl text-slate">Sales</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Tile label="Orders" value={String(stats.sales.orders)} />
-            <Tile
-              label="Awaiting payment"
-              value={String(stats.sales.awaitingPayment)}
-              hint={stats.sales.awaitingPayment > 0 ? 'gateway not live yet' : undefined}
-            />
-            <Tile label="To dispatch" value={String(stats.sales.awaitingDispatch)} />
-            <Tile label="Completed" value={String(stats.sales.completed)} />
-          </div>
+        {/* Chart and category split */}
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+          <Panel title="Sales overview">
+            <SalesChart series={salesSeries} />
+          </Panel>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Tile
-              label="Your payout"
-              value={rupees(stats.sales.payoutInr)}
-              hint="after commission, GST and TDS — on payments that have cleared"
-              accent
+          <Panel title="Listings by kind">
+            <CategoryDonut
+              slices={[
+                { label: 'Banknotes', value: stats.byKind.notes, colour: '#1a4a2e' },
+                { label: 'Coins', value: stats.byKind.coins, colour: '#c9a84c' },
+                { label: 'Other collectibles', value: stats.byKind.other, colour: '#1a4a46' },
+              ]}
             />
-            <Tile
-              label="Committed by buyers"
-              value={rupees(stats.sales.committedInr)}
-              hint="includes orders still awaiting payment; not yet earned"
-            />
-          </div>
-        </section>
+          </Panel>
+        </div>
 
-        <section>
-          <h2 className="mb-4 font-display text-xl text-slate">Auctions</h2>
-          {stats.auctions.live + stats.auctions.scheduled + stats.auctions.ended === 0 ? (
-            <p className="rounded-sm border border-sand-line bg-sand-raised p-6 text-sm text-slate-dim">
-              You have no auction lots yet. Choose{' '}
-              <span className="text-slate">Auction</span> when you list an item, or open any draft
-              below and choose <span className="text-slate">Sell by auction instead</span>.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <Tile label="Live" value={String(stats.auctions.live)} accent />
-              <Tile label="Scheduled" value={String(stats.auctions.scheduled)} />
-              <Tile label="Ended" value={String(stats.auctions.ended)} />
-              <Tile label="Bids received" value={String(stats.auctions.bids)} />
+        {/* Orders, best sellers, money */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Panel title="Recent orders" action={{ href: '/orders', label: 'View all' }}>
+            {recentOrders.length === 0 ? (
+              <p className="text-sm text-slate-dim">No orders yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {recentOrders.map((o) => (
+                  <li key={o.id} className="flex items-center gap-3">
+                    {o.imageUrl !== null ? (
+                      <img
+                        src={o.imageUrl}
+                        alt=""
+                        className="h-10 w-14 shrink-0 rounded-sm border border-sand-line object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-14 shrink-0 rounded-sm border border-dashed border-sand-line" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={`/orders/${o.id}`}
+                        className="font-mono text-xs text-slate underline-offset-4 hover:underline"
+                      >
+                        {o.orderNumber}
+                      </a>
+                      <p className="mt-0.5 text-xs text-slate-dim">{rupees(o.totalInr)}</p>
+                    </div>
+                    <span
+                      className={`text-[10px] uppercase tracking-wider ${ORDER_TONE[o.state] ?? 'text-slate-dim'}`}
+                    >
+                      {o.state.replace(/_/g, ' ')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Most looked at" action={{ href: '/seller/items', label: 'View all' }}>
+            {topListings.length === 0 ? (
+              <p className="text-sm text-slate-dim">Nothing listed yet.</p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {topListings.map((l) => (
+                  <li key={l.id} className="flex items-center gap-3">
+                    {l.imageUrl !== null ? (
+                      <img
+                        src={l.imageUrl}
+                        alt=""
+                        className="h-10 w-14 shrink-0 rounded-sm border border-sand-line object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-14 shrink-0 rounded-sm border border-dashed border-sand-line" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={`/listing/${l.id}`}
+                        className="font-mono text-xs text-slate underline-offset-4 hover:underline"
+                      >
+                        {l.serialDigits ?? l.title}
+                      </a>
+                      <p className="mt-0.5 text-xs text-slate-dim">
+                        {l.priceInr === null ? '—' : rupees(l.priceInr)} · {l.views} view
+                        {l.views === 1 ? '' : 's'}
+                        {l.sold > 0 && ` · ${l.sold} sold`}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Payments" action={{ href: '/seller/payouts', label: 'View details' }}>
+            <div className="guilloche rounded-sm border border-line bg-primary p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cream-dim">
+                Ready to request
+              </p>
+              <p className="mt-2 font-display text-2xl tabular-nums text-accent-bright">
+                {rupees(payouts.availableInr)}
+              </p>
+              <a
+                href="/seller/payouts"
+                className="mt-4 inline-block rounded-full bg-accent px-5 py-2 text-xs font-medium text-ink transition-colors hover:bg-accent-bright"
+              >
+                Withdraw funds
+              </a>
             </div>
-          )}
-        </section>
+
+            <dl className="mt-4 flex flex-col gap-2 text-sm">
+              {(
+                [
+                  ['Cleared to you', rupees(stats.sales.payoutInr)],
+                  ['Already paid out', rupees(payouts.paidInr)],
+                  ['Requested', rupees(payouts.requestedInr)],
+                  ['On hold', rupees(payouts.onHoldInr)],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} className="flex items-baseline justify-between gap-3">
+                  <dt className="text-slate-dim">{label}</dt>
+                  <dd className="tabular-nums text-slate">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Panel>
+        </div>
+
+        <QuickActions
+          actions={[
+            { href: '/sell', label: 'Add listing', icon: '＋' },
+            { href: '/seller/items', label: 'My items', icon: '▤' },
+            { href: '/sell?mode=auction', label: 'New auction', icon: '⚖' },
+            { href: '/orders', label: 'Orders', icon: '▦' },
+            { href: '/seller/payouts', label: 'Payouts', icon: '₹' },
+            { href: '/contact', label: 'Support', icon: '☎' },
+          ]}
+        />
 
         {needsPhotos.length > 0 && (
           <div className="rounded-sm border border-accent-deep/40 bg-accent-deep/5 p-5">
@@ -140,8 +224,11 @@ export default async function SellerDashboardPage() {
             <p className="mt-2 text-sm leading-relaxed text-slate-dim">
               {needsPhotos.length} of your {listings.length} listing
               {listings.length === 1 ? '' : 's'} {needsPhotos.length === 1 ? 'has' : 'have'} no
-              photograph. Buyers decide on the picture — use{' '}
-              <span className="text-slate">Add a photograph</span> on any item below.
+              photograph. Buyers decide on the picture —{' '}
+              <a href="/seller/photos" className="text-accent-deep underline underline-offset-4">
+                add them here
+              </a>
+              .
             </p>
           </div>
         )}
@@ -168,6 +255,13 @@ export default async function SellerDashboardPage() {
             </ul>
           )}
         </section>
+
+        {/* Deliberately absent: a store rating. There is no reviews system yet,
+            so any number here would be invented. */}
+        <p className="text-xs text-slate-dim">
+          Ratings and reviews are not built yet, so no store rating is shown. {STATE_LABEL['minted']}{' '}
+          listings are visible to buyers.
+        </p>
       </div>
     </DashboardShell>
   );

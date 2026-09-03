@@ -415,6 +415,80 @@ export function registerSellerRoutes(router: Router, database: Database): void {
       [seller.id],
     );
 
+
+    // Daily takings for the last 30 days, so the dashboard can draw a line
+    // rather than a single number. generate_series fills the empty days: a
+    // chart with gaps where nothing sold would read as missing data.
+    const series = await ctx.db.query<{ day: string; paise: string; orders: string }>(
+      `select d.day::date::text as day,
+              coalesce(sum(o.subtotal_paise), 0)::text as paise,
+              count(o.id)::text as orders
+         from generate_series(current_date - interval '29 days', current_date, interval '1 day') d(day)
+         left join orders o
+           on o.seller_id = $1
+          and o.created_at::date = d.day::date
+          and o.state not in ('cancelled', 'refunded')
+        group by d.day
+        order by d.day`,
+      [seller.id],
+    );
+
+    const recent = await ctx.db.query<{
+      id: string;
+      order_number: string;
+      state: string;
+      total_paise: string;
+      created_at: string;
+      title: string;
+      thumb: string | null;
+    }>(
+      `select o.id, o.order_number, o.state, o.total_paise::text as total_paise,
+              o.created_at::text as created_at, l.title,
+              (select m.storage_key from media m
+                where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb
+         from orders o
+         join listings l on l.id = o.listing_id
+        where o.seller_id = $1
+        order by o.created_at desc
+        limit 5`,
+      [seller.id],
+    );
+
+    // "Top selling" needs sales to rank by; with few or none, views are the
+    // only signal there is, so rank by sales first and views second.
+    const top = await ctx.db.query<{
+      id: string;
+      title: string;
+      price_paise: string | null;
+      views: number;
+      sold: string;
+      thumb: string | null;
+      serial_digits: string | null;
+    }>(
+      `select l.id, l.title, l.price_paise::text as price_paise, l.view_count as views,
+              (select count(*) from orders o
+                where o.listing_id = l.id and o.state not in ('cancelled','refunded'))::text as sold,
+              (select m.storage_key from media m
+                where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb,
+              n.serial_digits
+         from listings l
+         left join notes n on n.listing_id = l.id
+        where l.seller_id = $1
+        order by sold desc, l.view_count desc
+        limit 4`,
+      [seller.id],
+    );
+
+    const payoutTotals = await ctx.db.query<Record<string, string>>(
+      `select
+         coalesce(sum(amount_paise) filter (where state = 'pending'), 0)::text    as available,
+         coalesce(sum(amount_paise) filter (where state = 'processing'), 0)::text as requested,
+         coalesce(sum(amount_paise) filter (where state = 'paid'), 0)::text       as paid,
+         coalesce(sum(amount_paise) filter (where state = 'on_hold'), 0)::text    as on_hold
+       from payouts where seller_id = $1`,
+      [seller.id],
+    );
+
     const c = counts.rows[0] ?? {};
     const s = sales.rows[0] ?? {};
     const a = auctions.rows[0] ?? {};
@@ -455,6 +529,38 @@ export function registerSellerRoutes(router: Router, database: Database): void {
           bids: n(a, 'bids'),
         },
       },
+      salesSeries: series.rows.map((r) => ({
+        day: r.day,
+        inr: Number(r.paise) / 100,
+        orders: Number(r.orders),
+      })),
+      recentOrders: recent.rows.map((r) => ({
+        id: r.id,
+        orderNumber: r.order_number,
+        state: r.state,
+        totalInr: Number(r.total_paise) / 100,
+        title: r.title,
+        imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
+        createdAt: r.created_at,
+      })),
+      topListings: top.rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        serialDigits: r.serial_digits,
+        priceInr: r.price_paise === null ? null : Number(r.price_paise) / 100,
+        views: r.views,
+        sold: Number(r.sold),
+        imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
+      })),
+      payouts: (() => {
+        const t = payoutTotals.rows[0] ?? {};
+        return {
+          availableInr: Number(t['available'] ?? 0) / 100,
+          requestedInr: Number(t['requested'] ?? 0) / 100,
+          paidInr: Number(t['paid'] ?? 0) / 100,
+          onHoldInr: Number(t['on_hold'] ?? 0) / 100,
+        };
+      })(),
       listings: rows.rows.map((r) => ({
         id: r.id,
         title: r.title,

@@ -56,6 +56,31 @@ export interface Dashboard {
     auctions: { live: number; scheduled: number; ended: number; bids: number };
   };
   listings: SellerListing[];
+  salesSeries: { day: string; inr: number; orders: number }[];
+  recentOrders: {
+    id: string;
+    orderNumber: string;
+    state: string;
+    totalInr: number;
+    title: string;
+    imageUrl: string | null;
+    createdAt: string;
+  }[];
+  topListings: {
+    id: string;
+    title: string;
+    serialDigits: string | null;
+    priceInr: number | null;
+    views: number;
+    sold: number;
+    imageUrl: string | null;
+  }[];
+  payouts: {
+    availableInr: number;
+    requestedInr: number;
+    paidInr: number;
+    onHoldInr: number;
+  };
 }
 
 export const STATE_LABEL: Record<string, string> = {

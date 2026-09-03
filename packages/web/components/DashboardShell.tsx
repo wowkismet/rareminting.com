@@ -50,17 +50,19 @@ export function DashboardShell({
     <div className="flex min-h-screen flex-col">
       <SiteHeader user={user} compact />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-5 py-10 md:flex-row md:gap-10">
-        {/* Left menu. On a phone it becomes a horizontal strip above the
-            content rather than a drawer, so nothing needs JavaScript to open. */}
+      <div className="flex w-full flex-1 flex-col md:flex-row">
+        {/* A dark rail, so the working area reads as a console rather than a
+            page with a sidebar bolted on. On a phone it becomes a horizontal
+            strip above the content rather than a drawer, so nothing needs
+            JavaScript to open. */}
         <nav
           aria-label="Dashboard"
-          className="shrink-0 md:w-56 md:border-r md:border-sand-line md:pr-6"
+          className="shrink-0 bg-primary px-5 py-6 md:w-60 md:px-4 md:py-8"
         >
           <div className="flex flex-col gap-6">
             {sections.map((section) => (
               <div key={section.title}>
-                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-cream-dim/70">
                   {section.title}
                 </p>
                 <ul className="mt-3 flex flex-wrap gap-1.5 md:flex-col md:gap-0.5">
@@ -73,13 +75,13 @@ export function DashboardShell({
                           {...(active ? { 'aria-current': 'page' as const } : {})}
                           className={
                             active
-                              ? 'flex items-center justify-between gap-3 rounded-sm border border-accent-deep/40 bg-accent-deep/10 px-3 py-2 text-sm text-slate md:border-0 md:border-l-2 md:border-accent-deep md:bg-transparent md:pl-3'
-                              : 'flex items-center justify-between gap-3 rounded-sm px-3 py-2 text-sm text-slate-dim transition-colors hover:bg-sand-raised hover:text-slate md:border-l-2 md:border-transparent'
+                              ? 'flex items-center justify-between gap-3 rounded-sm bg-accent/15 px-3 py-2 text-sm text-accent-bright ring-1 ring-accent/30'
+                              : 'flex items-center justify-between gap-3 rounded-sm px-3 py-2 text-sm text-cream-dim transition-colors hover:bg-cream/10 hover:text-cream'
                           }
                         >
                           <span>{item.label}</span>
                           {item.badge !== undefined && item.badge > 0 && (
-                            <span className="rounded-full bg-primary px-2 py-0.5 font-mono text-[10px] tabular-nums text-cream">
+                            <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[10px] tabular-nums text-ink">
                               {item.badge}
                             </span>
                           )}
@@ -93,7 +95,7 @@ export function DashboardShell({
           </div>
         </nav>
 
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 px-5 py-8 md:px-8">
           <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">

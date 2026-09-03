@@ -18,6 +18,7 @@ interface AdminOverview {
     totalProducts: number;
     totalRevenueInr: number;
   };
+  trend: { gmvPct: number | null; ordersPct: number | null };
   alerts: {
     pendingPayoutsInr: number;
     paidPayoutsInr: number;
@@ -41,6 +42,12 @@ interface AdminOverview {
 const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
 
 const SLICE_COLOURS = ['#1a4a2e', '#1a4a46', '#c9a84c', '#8b7355', '#d3d3d3'] as const;
+
+/** A measured period-on-period change, or nothing at all. */
+function pctHint(pct: number | null): string | undefined {
+  if (pct === null) return undefined;
+  return `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct)}% vs the previous 30 days`;
+}
 
 function KpiCard({
   label,
@@ -170,11 +177,21 @@ export default async function AdminDashboardPage() {
       <div className="flex flex-col gap-8">
         {/* KPI Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          {/* No month-on-month trend figures. Nothing here computes them, and a
-              percentage invented for the sake of the layout is the one number
-              on this page staff would have no way to check. */}
-          <KpiCard label="Total GMV" value={rupees(o.kpis.totalGmvInr)} icon="📊" />
-          <KpiCard label="Total Orders" value={o.kpis.totalOrders.toLocaleString('en-IN')} icon="🛍️" />
+          {/* Only GMV and orders carry a trend: they are the two the database
+              can actually measure over time. The rest show none rather than a
+              percentage invented to fill the card. */}
+          <KpiCard
+            label="Total GMV"
+            value={rupees(o.kpis.totalGmvInr)}
+            icon="📊"
+            trend={pctHint(o.trend.gmvPct)}
+          />
+          <KpiCard
+            label="Total Orders"
+            value={o.kpis.totalOrders.toLocaleString('en-IN')}
+            icon="🛍️"
+            trend={pctHint(o.trend.ordersPct)}
+          />
           <KpiCard label="Total Users" value={o.kpis.totalUsers.toLocaleString('en-IN')} icon="👥" />
           <KpiCard label="Total Sellers" value={o.kpis.totalSellers.toLocaleString('en-IN')} icon="🏪" />
           <KpiCard label="Total Products" value={o.kpis.totalProducts.toLocaleString('en-IN')} icon="📦" />

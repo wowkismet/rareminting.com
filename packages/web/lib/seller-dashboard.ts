@@ -43,6 +43,7 @@ export interface Dashboard {
       withdrawn: number;
     };
     byKind: { notes: number; coins: number; other: number };
+    salesByKind: { kind: string; inr: number }[];
     views: number;
     sales: {
       orders: number;
@@ -57,6 +58,7 @@ export interface Dashboard {
   };
   listings: SellerListing[];
   reviews: { count: number; average: number | null };
+  trend: { salesPct: number | null; ordersPct: number | null };
   disputes: { open: number; total: number };
   salesSeries: { day: string; inr: number; orders: number }[];
   recentOrders: {

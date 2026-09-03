@@ -14,6 +14,22 @@ import { loadSeller, rupees, sellerMenu, STATE_LABEL } from '@/lib/seller-dashbo
 export const metadata: Metadata = { title: 'Seller dashboard' };
 export const dynamic = 'force-dynamic';
 
+/**
+ * A period-on-period change, or nothing.
+ *
+ * Null means there was no comparable period to measure against, and no
+ * sentence is better than one implying a trend that was never computed.
+ */
+function pctHint(pct: number | null): string | undefined {
+  if (pct === null) return undefined;
+  return `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct)}% vs the previous 30 days`;
+}
+
+const KIND_LABEL: Record<string, string> = {
+  banknote: 'Banknotes',
+  coin: 'Coins',
+};
+
 const ORDER_TONE: Record<string, string> = {
   payment_pending: 'text-ember',
   paid: 'text-accent-deep',
@@ -34,7 +50,13 @@ const ORDER_TONE: Record<string, string> = {
 export default async function SellerDashboardPage() {
   const { user, data } = await loadSeller();
   const { seller, stats, listings, salesSeries, recentOrders, topListings, payouts } = data;
+  const { reviews, trend } = data;
   const needsPhotos = listings.filter((l) => l.photoCount === 0);
+
+  // Sales split by kind, but only once something has sold. Before that the
+  // honest thing to show is what is listed, clearly labelled as such, rather
+  // than an empty ring implying no interest.
+  const soldTotal = stats.salesByKind.reduce((sum, k) => sum + k.inr, 0);
 
   return (
     <DashboardShell
@@ -61,14 +83,18 @@ export default async function SellerDashboardPage() {
         )}
 
         {/* Headline figures */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
             label="Total sales"
             value={rupees(stats.sales.grossInr)}
-            hint="payments that have cleared"
+            hint={pctHint(trend.salesPct) ?? 'payments that have cleared'}
             accent
           />
-          <StatCard label="Total orders" value={String(stats.sales.orders)} hint="all time" />
+          <StatCard
+            label="Total orders"
+            value={String(stats.sales.orders)}
+            hint={pctHint(trend.ordersPct) ?? 'all time'}
+          />
           <StatCard
             label="Active listings"
             value={String(stats.listings.live)}
@@ -79,6 +105,15 @@ export default async function SellerDashboardPage() {
             value={String(stats.sales.awaitingPayment + stats.sales.awaitingDispatch)}
             hint="awaiting payment or dispatch"
           />
+          <StatCard
+            label="Store rating"
+            value={reviews.average === null ? '—' : `${reviews.average} / 5`}
+            hint={
+              reviews.count === 0
+                ? 'no reviews yet'
+                : `based on ${reviews.count} review${reviews.count === 1 ? '' : 's'}`
+            }
+          />
         </div>
 
         {/* Chart and category split */}
@@ -87,14 +122,32 @@ export default async function SellerDashboardPage() {
             <SalesChart series={salesSeries} />
           </Panel>
 
-          <Panel title="Listings by kind">
-            <CategoryDonut
-              slices={[
-                { label: 'Banknotes', value: stats.byKind.notes, colour: '#1a4a2e' },
-                { label: 'Coins', value: stats.byKind.coins, colour: '#c9a84c' },
-                { label: 'Other collectibles', value: stats.byKind.other, colour: '#1a4a46' },
-              ]}
-            />
+          <Panel title={soldTotal > 0 ? 'Sales by category' : 'Listings by kind'}>
+            {soldTotal > 0 ? (
+              <CategoryDonut
+                slices={stats.salesByKind
+                  .filter((k) => k.inr > 0)
+                  .map((k, i) => ({
+                    label: KIND_LABEL[k.kind] ?? 'Other collectibles',
+                    value: k.inr,
+                    colour: ['#1a4a2e', '#c9a84c', '#1a4a46'][i % 3] as string,
+                  }))}
+              />
+            ) : (
+              <>
+                <CategoryDonut
+                  slices={[
+                    { label: 'Banknotes', value: stats.byKind.notes, colour: '#1a4a2e' },
+                    { label: 'Coins', value: stats.byKind.coins, colour: '#c9a84c' },
+                    { label: 'Other collectibles', value: stats.byKind.other, colour: '#1a4a46' },
+                  ]}
+                />
+                <p className="mt-3 text-xs text-slate-dim">
+                  Counts of what you have listed. Once something sells this becomes the split by
+                  money taken.
+                </p>
+              </>
+            )}
           </Panel>
         </div>
 
@@ -256,11 +309,10 @@ export default async function SellerDashboardPage() {
           )}
         </section>
 
-        {/* Deliberately absent: a store rating. There is no reviews system yet,
-            so any number here would be invented. */}
         <p className="text-xs text-slate-dim">
-          Ratings and reviews are not built yet, so no store rating is shown. {STATE_LABEL['minted']}{' '}
-          listings are visible to buyers.
+          Only {STATE_LABEL['minted']?.toLowerCase()} listings are visible to buyers. Your store
+          rating is the average of reviews left after an order completes, and shows nothing until
+          the first one arrives.
         </p>
       </div>
     </DashboardShell>

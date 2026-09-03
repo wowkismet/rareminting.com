@@ -451,6 +451,40 @@ export function registerSellerRoutes(router: Router, database: Database): void {
       [seller.id],
     );
 
+    // Thirty days against the thirty before them. Real arithmetic on real
+    // orders — the alternative is a percentage chosen to look encouraging,
+    // which is the one figure on the page a seller cannot check.
+    const trend = await ctx.db.query<Record<string, string>>(
+      `select
+         coalesce(sum(subtotal_paise) filter (
+           where ${PAID} and created_at >= current_date - interval '29 days'), 0)::text as gross_now,
+         coalesce(sum(subtotal_paise) filter (
+           where ${PAID} and created_at >= current_date - interval '59 days'
+             and created_at <  current_date - interval '29 days'), 0)::text as gross_prev,
+         count(*) filter (
+           where created_at >= current_date - interval '29 days')::text as orders_now,
+         count(*) filter (
+           where created_at >= current_date - interval '59 days'
+             and created_at <  current_date - interval '29 days')::text as orders_prev
+       from orders
+      where seller_id = $1 and state not in ('cancelled','refunded')`,
+      [seller.id],
+    );
+
+    // The category split by money taken, not by how many things are listed.
+    // Twenty cheap coins and one expensive note are not the same story.
+    const salesByKind = await ctx.db.query<{ kind: string; paise: string }>(
+      `select l.kind, coalesce(sum(o.subtotal_paise), 0)::text as paise
+         from listings l
+         left join orders o
+           on o.listing_id = l.id
+          and o.seller_id = $1
+          and o.${PAID}
+        where l.seller_id = $1
+        group by l.kind`,
+      [seller.id],
+    );
+
     const auctions = await ctx.db.query<Record<string, string>>(
       `select
          count(*) filter (where a.state = 'live')::text      as live,
@@ -610,6 +644,11 @@ export function registerSellerRoutes(router: Router, database: Database): void {
           withdrawn: n(c, 'withdrawn'),
         },
         byKind: { notes: n(c, 'notes'), coins: n(c, 'coins'), other: n(c, 'other') },
+        /** Money taken per kind, for the category split. */
+        salesByKind: salesByKind.rows.map((r) => ({
+          kind: r.kind,
+          inr: Number(r.paise) / 100,
+        })),
         views: n(c, 'views'),
         sales: {
           orders: n(s, 'orders'),
@@ -643,6 +682,22 @@ export function registerSellerRoutes(router: Router, database: Database): void {
         open: Number(disputeStats.rows[0]?.['open'] ?? 0),
         total: Number(disputeStats.rows[0]?.['total'] ?? 0),
       },
+      /**
+       * Change against the preceding thirty days.
+       *
+       * Null when there is nothing to compare against: growth from zero is not
+       * a percentage, and "+100%" off a single order flatters a seller into a
+       * decision they would not otherwise make.
+       */
+      trend: (() => {
+        const t = (trend.rows[0] ?? {}) as Record<string, string>;
+        const change = (now: number, prev: number): number | null =>
+          prev === 0 ? null : Math.round(((now - prev) / prev) * 1000) / 10;
+        return {
+          salesPct: change(Number(t['gross_now'] ?? 0), Number(t['gross_prev'] ?? 0)),
+          ordersPct: change(Number(t['orders_now'] ?? 0), Number(t['orders_prev'] ?? 0)),
+        };
+      })(),
       salesSeries: series.rows.map((r) => ({
         day: r.day,
         inr: Number(r.paise) / 100,

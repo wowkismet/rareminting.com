@@ -101,6 +101,23 @@ export function registerAdminRoutes(router: Router): void {
          from orders where state not in ('cancelled','refunded')`,
     );
 
+    // Thirty days against the thirty before. Computed, not chosen — a platform
+    // console is exactly where an encouraging invented percentage does damage.
+    const trend = await ctx.db.query<Record<string, string>>(
+      `select
+         coalesce(sum(total_paise) filter (
+           where created_at >= current_date - interval '29 days'), 0)::text as gmv_now,
+         coalesce(sum(total_paise) filter (
+           where created_at >= current_date - interval '59 days'
+             and created_at <  current_date - interval '29 days'), 0)::text as gmv_prev,
+         count(*) filter (
+           where created_at >= current_date - interval '29 days')::text as orders_now,
+         count(*) filter (
+           where created_at >= current_date - interval '59 days'
+             and created_at <  current_date - interval '29 days')::text as orders_prev
+         from orders where state not in ('cancelled','refunded')`,
+    );
+
     // Sales series (last 30 days for chart)
     const series = await ctx.db.query<{ day: string; gmv: string }>(
       `select d.day::date::text as day,
@@ -226,6 +243,17 @@ export function registerAdminRoutes(router: Router): void {
         totalProducts: n('products'),
         totalRevenueInr: rupees('revenue'),
       },
+      // Null where there is no earlier period to compare against: growth from
+      // nothing is not a percentage.
+      trend: (() => {
+        const t = (trend.rows[0] ?? {}) as Record<string, string>;
+        const change = (now: number, prev: number): number | null =>
+          prev === 0 ? null : Math.round(((now - prev) / prev) * 1000) / 10;
+        return {
+          gmvPct: change(Number(t['gmv_now'] ?? 0), Number(t['gmv_prev'] ?? 0)),
+          ordersPct: change(Number(t['orders_now'] ?? 0), Number(t['orders_prev'] ?? 0)),
+        };
+      })(),
       alerts: {
         pendingPayoutsInr: Number(alrt['payout_amount'] ?? 0) / 100,
         paidPayoutsInr: Number(alrt['payout_paid'] ?? 0) / 100,

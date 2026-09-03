@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
-import { api, type ApiListing } from '@/lib/api.ts';
-import { buyerMenu, type BuyerOrder } from '@/lib/buyer-dashboard.ts';
+import { DashboardShell, Empty } from '@/components/DashboardShell.tsx';
+import { Panel, QuickActions, StatCard } from '@/components/DashboardPanels.tsx';
+import { api } from '@/lib/api.ts';
+import { buyerMenu, type BasketResponse } from '@/lib/buyer-dashboard.ts';
 import { currentSeller, currentUser, sessionToken } from '@/lib/session.ts';
 
 export const metadata: Metadata = { title: 'Your account' };
@@ -11,45 +12,109 @@ export const dynamic = 'force-dynamic';
 
 const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
 
+interface BuyerDashboard {
+  stats: {
+    orders: number;
+    ordersOpen: number;
+    spentInr: number;
+    cart: number;
+    saved: number;
+    collections: number;
+    activeBids: number;
+  };
+  memberSince: string | null;
+  bids: {
+    auctionId: string;
+    listingId: string;
+    title: string;
+    serialDigits: string | null;
+    myMaxInr: number;
+    currentInr: number | null;
+    bidCount: number;
+    endsAt: string;
+    leading: boolean;
+    imageUrl: string | null;
+  }[];
+  recentOrders: {
+    id: string;
+    orderNumber: string;
+    state: string;
+    totalInr: number;
+    title: string | null;
+    imageUrl: string | null;
+    createdAt: string;
+  }[];
+}
+
+const ORDER_TONE: Record<string, string> = {
+  payment_pending: 'text-ember',
+  paid: 'text-accent-deep',
+  shipped: 'text-accent-deep',
+  delivered: 'text-accent-deep',
+  completed: 'text-slate-dim',
+  cancelled: 'text-slate-dim',
+};
+
+/** "Jan 2024", or nothing if the date will not parse. */
+function monthYear(iso: string | null): string {
+  if (iso === null) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+}
+
+/** How long until an auction closes, in the coarsest unit that still informs. */
+function closesIn(iso: string): string {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(ms) || ms <= 0) return 'closing';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m left`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 48) return `${hours}h left`;
+  return `${Math.floor(hours / 24)}d left`;
+}
+
 /**
  * The buyer's dashboard.
  *
- * Buyers had no home of their own — an account page listed a seller's stock and
- * nothing else, so somebody who had only ever bought saw a page about selling.
- * This is what they came for: what they have ordered, what is on its way, and
- * a route back to finding a date.
+ * What a buyer came for: what they have ordered, what they are still bidding
+ * on, what they have put aside, and a route back to finding a date.
+ *
+ * There is no wallet, no points balance and no viewing history here. Not an
+ * oversight — none of the three exists, and this is the page where an invented
+ * figure would look most like the site telling somebody about their own money.
  */
 export default async function AccountPage() {
   const user = await currentUser();
   if (user === null) redirect('/signin');
 
   const token = await sessionToken();
-  const [seller, orders, floor] = await Promise.all([
+  const [seller, dash, saved] = await Promise.all([
     currentSeller(),
-    api<{ orders: BuyerOrder[] }>('/v1/orders', { token }),
-    api<{ total?: number }>('/v1/listings?limit=1'),
+    api<BuyerDashboard>('/v1/me/dashboard', { token }),
+    api<BasketResponse>('/v1/saved', { token }),
   ]);
 
-  const mine = orders.ok ? orders.data.orders.filter((o) => o.role !== 'seller') : [];
-  const open = mine.filter(
-    (o) => !['completed', 'cancelled', 'refunded'].includes(o.state),
-  );
-  const spent = mine
-    .filter((o) => !['cancelled', 'refunded'].includes(o.state))
-    .reduce((sum, o) => sum + (o.totalInr ?? 0), 0);
-  const forSale = floor.ok ? (floor.data.total ?? 0) : 0;
+  if (!dash.ok) redirect('/signin');
+  const { stats, bids, recentOrders, memberSince } = dash.data;
+  const savedItems = saved.ok ? saved.data.items : [];
 
   return (
     <DashboardShell
       user={user}
       eyebrow="The Vault"
-      title={user.fullName ?? 'Your account'}
-      subtitle={user.email}
-      sections={buyerMenu({ orders: mine.length, isSeller: seller !== null })}
+      title={`Hello, ${user.fullName ?? user.email.split('@')[0]}`}
+      subtitle={`Member since ${monthYear(memberSince)}`}
+      sections={buyerMenu({
+        orders: stats.orders,
+        isSeller: seller !== null,
+        cart: stats.cart,
+        saved: stats.saved,
+      })}
       current="/account"
       action={{ href: '/browse', label: 'Find a date' }}
     >
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6">
         {!user.emailVerified && (
           <p className="rounded-sm border border-accent-deep/40 bg-sand-raised px-5 py-4 text-sm text-slate-dim">
             Your email address is not verified yet. Verification emails are not switched on — it
@@ -57,83 +122,170 @@ export default async function AccountPage() {
           </p>
         )}
 
-        <section>
-          <h2 className="mb-4 font-display text-xl text-slate">Your buying</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Tile label="Orders" value={String(mine.length)} />
-            <Tile label="In progress" value={String(open.length)} accent />
-            <Tile label="Spent" value={rupees(spent)} hint="excludes cancelled" />
-            <Tile label="Notes for sale" value={String(forSale)} hint="across the site" />
-          </div>
-        </section>
+        {/* Headline figures */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard
+            label="Total orders"
+            value={String(stats.orders)}
+            hint={stats.ordersOpen === 0 ? 'none in flight' : `${stats.ordersOpen} in flight`}
+            accent
+          />
+          <StatCard
+            label="Active bids"
+            value={String(stats.activeBids)}
+            hint="on auctions still running"
+          />
+          <StatCard label="Saved items" value={String(stats.saved)} hint="put aside for later" />
+          <StatCard label="Collections" value={String(stats.collections)} hint="yours" />
+          <StatCard
+            label="Spent"
+            value={rupees(stats.spentInr)}
+            hint="excluding cancellations"
+          />
+        </div>
 
-        <section>
-          <div className="mb-4 flex items-baseline justify-between gap-4">
-            <h2 className="font-display text-xl text-slate">Recent orders</h2>
-            {mine.length > 4 && (
-              <a href="/orders" className="text-sm text-accent-deep underline underline-offset-4">
-                See all {mine.length}
-              </a>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel title="Recent orders" action={{ href: '/orders', label: 'View all' }}>
+            {recentOrders.length === 0 ? (
+              <Empty action={{ href: '/browse', label: 'Find a date' }}>
+                Nothing ordered yet. Search for a date that means something to you and the notes
+                carrying it will come up.
+              </Empty>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {recentOrders.map((o) => (
+                  <li key={o.id} className="flex items-center gap-3">
+                    {o.imageUrl !== null ? (
+                      <img
+                        src={o.imageUrl}
+                        alt=""
+                        className="h-10 w-14 shrink-0 rounded-sm border border-sand-line object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-14 shrink-0 rounded-sm border border-dashed border-sand-line" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={`/orders/${o.id}`}
+                        className="font-mono text-xs text-slate underline-offset-4 hover:underline"
+                      >
+                        {o.orderNumber}
+                      </a>
+                      <p className="mt-0.5 truncate text-xs text-slate-dim">
+                        {o.title ?? '—'} · {o.createdAt.slice(0, 10)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="tabular-nums text-sm text-slate">{rupees(o.totalInr)}</p>
+                      <p
+                        className={`text-[10px] uppercase tracking-wider ${ORDER_TONE[o.state] ?? 'text-slate-dim'}`}
+                      >
+                        {o.state.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
+          </Panel>
 
-          {mine.length === 0 ? (
-            <Empty action={{ href: '/browse', label: 'Find your date' }}>
-              You have not bought anything yet. Search a date that matters to you and see which
-              notes carry it.
+          <Panel title="Auctions you are bidding on" action={{ href: '/auctions', label: 'All auctions' }}>
+            {bids.length === 0 ? (
+              <Empty action={{ href: '/auctions', label: 'See what is running' }}>
+                You have no live bids. A bid here shows whether you are still the one to beat, and
+                how long is left.
+              </Empty>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {bids.map((b) => (
+                  <li key={b.auctionId} className="flex items-center gap-3">
+                    {b.imageUrl !== null ? (
+                      <img
+                        src={b.imageUrl}
+                        alt=""
+                        className="h-10 w-14 shrink-0 rounded-sm border border-sand-line object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-14 shrink-0 rounded-sm border border-dashed border-sand-line" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={`/auctions/${b.auctionId}`}
+                        className="font-mono text-xs text-slate underline-offset-4 hover:underline"
+                      >
+                        {b.serialDigits ?? b.title}
+                      </a>
+                      <p className="mt-0.5 text-xs text-slate-dim">
+                        {b.currentInr === null ? 'no bids yet' : `at ${rupees(b.currentInr)}`} ·{' '}
+                        {closesIn(b.endsAt)}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[10px] uppercase tracking-wider ${
+                        b.leading ? 'text-accent-deep' : 'text-ember'
+                      }`}
+                    >
+                      {b.leading ? 'leading' : 'outbid'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+
+        <QuickActions
+          actions={[
+            { href: '/browse', label: 'Find a date', icon: '🔍' },
+            { href: '/auctions', label: 'Auctions', icon: '⚖' },
+            { href: '/cart', label: 'Cart', icon: '🛒' },
+            { href: '/saved', label: 'Saved', icon: '♡' },
+            { href: '/orders', label: 'Orders', icon: '▦' },
+            { href: '/contact', label: 'Help', icon: '☎' },
+          ]}
+        />
+
+        <Panel title="Saved for later" action={{ href: '/saved', label: 'View all' }}>
+          {savedItems.length === 0 ? (
+            <Empty action={{ href: '/browse', label: 'Find a date' }}>
+              Nothing saved yet. Saving a note puts it aside without taking it off the market —
+              somebody else can still buy it, so the list says when one has gone.
             </Empty>
           ) : (
-            <ul className="flex flex-col gap-3">
-              {mine.slice(0, 4).map((order) => (
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {savedItems.slice(0, 4).map((item) => (
                 <li
-                  key={order.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-sm border border-sand-line bg-sand-raised p-4"
+                  key={item.listingId}
+                  className="rounded-sm border border-sand-line bg-sand-raised p-3"
                 >
-                  <div className="min-w-0">
-                    <a
-                      href={`/orders/${order.id}`}
-                      className="font-mono text-sm text-slate underline-offset-4 hover:underline"
-                    >
-                      {order.orderNumber}
-                    </a>
-                    <p className="mt-1 text-xs text-slate-dim">{order.title ?? 'Item'}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-full border border-sand-line px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-dim">
-                      {order.state.replace(/_/g, ' ')}
-                    </span>
-                    <span className="font-display text-lg tabular-nums text-slate">
-                      {order.totalInr === null ? '—' : rupees(order.totalInr)}
-                    </span>
-                  </div>
+                  {item.imageUrl !== null ? (
+                    <img
+                      src={item.imageUrl}
+                      alt=""
+                      className="mb-2 h-24 w-full rounded-sm object-cover"
+                    />
+                  ) : (
+                    <div className="mb-2 h-24 w-full rounded-sm border border-dashed border-sand-line" />
+                  )}
+                  <a
+                    href={`/listing/${item.listingId}`}
+                    className="font-mono text-xs text-slate underline-offset-4 hover:underline"
+                  >
+                    {item.serialDigits ?? item.title}
+                  </a>
+                  <p className="mt-1 text-xs text-slate-dim">
+                    {item.priceInr === null ? '—' : rupees(item.priceInr)}
+                  </p>
+                  {!item.available && (
+                    <p className="mt-1 text-[10px] uppercase tracking-wider text-ember">
+                      no longer available
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>
           )}
-        </section>
-
-        <section>
-          <h2 className="mb-4 font-display text-xl text-slate">Selling</h2>
-          {seller === null ? (
-            <Empty action={{ href: '/sell', label: 'Register as a seller' }}>
-              You have not registered as a seller. It takes six details, and once an admin approves
-              you there is no limit on how much you can list.
-            </Empty>
-          ) : (
-            <div className="rounded-sm border border-sand-line bg-sand-raised p-5">
-              <p className="text-sm text-slate-dim">
-                Selling as <span className="text-slate">{seller.displayName}</span> ·{' '}
-                {seller.approved ? 'approved' : `KYC ${seller.kycState}`}
-              </p>
-              <a
-                href="/seller"
-                className="mt-4 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-cream transition-colors hover:bg-secondary"
-              >
-                Open seller dashboard
-              </a>
-            </div>
-          )}
-        </section>
+        </Panel>
       </div>
     </DashboardShell>
   );

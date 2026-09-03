@@ -23,15 +23,21 @@ export interface BuyerOrder {
 export function buyerMenu({
   orders,
   isSeller,
+  cart = 0,
+  saved = 0,
 }: {
   orders: number;
   isSeller: boolean;
+  cart?: number;
+  saved?: number;
 }): MenuSection[] {
   return [
     {
       title: 'Buying',
       items: [
         { href: '/account', label: 'Overview' },
+        { href: '/cart', label: 'Cart', badge: cart },
+        { href: '/saved', label: 'Saved', badge: saved },
         { href: '/orders', label: 'My orders', badge: orders },
         { href: '/browse', label: 'Find a date' },
         { href: '/auctions', label: 'Auctions' },
@@ -46,4 +52,28 @@ export function buyerMenu({
       ],
     },
   ];
+}
+
+/** A cart or saved-items line, as the API returns it. */
+export interface BasketItem {
+  listingId: string;
+  title: string;
+  state: string;
+  saleMode: string;
+  priceInr: number | null;
+  grade: string | null;
+  serialDigits: string | null;
+  denomination: number | null;
+  imageUrl: string | null;
+  sellerName: string;
+  addedAt: string;
+  available: boolean;
+  note?: string;
+}
+
+export interface BasketResponse {
+  items: BasketItem[];
+  count: number;
+  availableCount: number;
+  totalInr?: number;
 }

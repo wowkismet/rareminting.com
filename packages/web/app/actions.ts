@@ -630,3 +630,68 @@ export async function startAuction(_prev: FormState, data: FormData): Promise<Fo
   revalidatePath('/seller');
   redirect(`/auctions/${result.data.auction.id}`);
 }
+
+/* ---------------- cart and saved items ---------------- */
+
+export async function addToCart(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  await api('/v1/cart', { method: 'POST', token, body: { listingId } });
+  revalidatePath('/cart');
+  revalidatePath(`/listing/${listingId}`);
+}
+
+export async function removeFromCart(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  await api(`/v1/cart/${listingId}`, { method: 'DELETE', token });
+  revalidatePath('/cart');
+}
+
+export async function saveForLater(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const note = text(data, 'note');
+  if (listingId === '') return;
+
+  await api('/v1/saved', {
+    method: 'POST',
+    token,
+    body: { listingId, ...(note === '' ? {} : { note }) },
+  });
+  revalidatePath('/saved');
+  revalidatePath(`/listing/${listingId}`);
+}
+
+export async function removeFromSaved(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  await api(`/v1/saved/${listingId}`, { method: 'DELETE', token });
+  revalidatePath('/saved');
+}
+
+export async function moveSavedToCart(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  await api(`/v1/saved/${listingId}/to-cart`, { method: 'POST', token });
+  revalidatePath('/saved');
+  revalidatePath('/cart');
+}

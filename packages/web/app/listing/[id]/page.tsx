@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { buyNow, publishListing, uploadPhoto } from '@/app/actions.ts';
+import { addToCart, buyNow, publishListing, saveForLater, uploadPhoto } from '@/app/actions.ts';
 import { NotePhotos, PhotoUpload } from '@/components/NotePhotos.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
@@ -219,6 +219,28 @@ export default async function ListingPage({
                   ` · ₹${listing.priceInr.toLocaleString('en-IN')}`}
               </button>
             </form>
+            {user !== null && !isOwner && (
+              <>
+                <form action={addToCart}>
+                  <input type="hidden" name="listingId" value={listing.id} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-sand-line px-6 py-3 text-sm text-slate transition-colors hover:border-accent-deep"
+                  >
+                    Add to cart
+                  </button>
+                </form>
+                <form action={saveForLater}>
+                  <input type="hidden" name="listingId" value={listing.id} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-sand-line px-6 py-3 text-sm text-slate-dim transition-colors hover:border-accent-deep hover:text-slate"
+                  >
+                    Save for later
+                  </button>
+                </form>
+              </>
+            )}
             <p className="text-xs text-slate-dim">
               Your payment is held until the note reaches you and the{' '}
               <a href="/refunds" className="underline underline-offset-4">

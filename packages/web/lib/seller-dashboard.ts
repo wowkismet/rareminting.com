@@ -31,7 +31,7 @@ export interface SellerListing {
 }
 
 export interface Dashboard {
-  seller: { displayName: string; kycState: string; approved: boolean };
+  seller: { displayName: string; kycState: string; approved: boolean; mintingVerified: boolean; createdAt: string };
   stats: {
     listings: {
       total: number;
@@ -56,6 +56,8 @@ export interface Dashboard {
     auctions: { live: number; scheduled: number; ended: number; bids: number };
   };
   listings: SellerListing[];
+  reviews: { count: number; average: number | null };
+  disputes: { open: number; total: number };
   salesSeries: { day: string; inr: number; orders: number }[];
   recentOrders: {
     id: string;
@@ -128,6 +130,7 @@ export function sellerMenu(data: Dashboard): MenuSection[] {
           label: 'My auctions',
           badge: data.stats.auctions.live + data.stats.auctions.scheduled,
         },
+        { href: '/seller/analytics', label: 'Analytics' },
       ],
     },
     {
@@ -135,11 +138,14 @@ export function sellerMenu(data: Dashboard): MenuSection[] {
       items: [
         { href: '/orders', label: 'Orders', badge: data.stats.sales.orders },
         { href: '/seller/payouts', label: 'Payouts' },
+        { href: '/seller/returns', label: 'Returns', badge: data.disputes.open },
       ],
     },
     {
       title: 'You',
       items: [
+        { href: '/seller/profile', label: 'Store profile' },
+        { href: '/seller/reviews', label: 'Reviews', badge: data.reviews.count },
         { href: '/account', label: 'Account' },
         { href: '/contact', label: 'Help' },
       ],

@@ -318,6 +318,86 @@ export function registerSellerRoutes(router: Router, database: Database): void {
     return json({ seller: publicSeller(seller) });
   });
 
+  /** GET /v1/sellers/me/reviews — what buyers said about this seller. */
+  router.add('GET', '/v1/sellers/me/reviews', async (ctx) => {
+    const seller = await requireSeller(ctx);
+
+    const rows = await ctx.db.query<{
+      id: string;
+      rating: number;
+      body: string | null;
+      created_at: string;
+      order_number: string;
+      reviewer: string;
+    }>(
+      `select r.id, r.rating, r.body, r.created_at::text as created_at,
+              o.order_number,
+              coalesce(u.full_name, split_part(u.email, '@', 1)) as reviewer
+         from reviews r
+         join orders o on o.id = r.order_id
+         join users u on u.id = r.reviewer_id
+        where r.subject_seller_id = $1
+        order by r.created_at desc
+        limit 100`,
+      [seller.id],
+    );
+
+    return json({
+      reviews: rows.rows.map((r) => ({
+        id: r.id,
+        rating: r.rating,
+        body: r.body,
+        createdAt: r.created_at,
+        orderNumber: r.order_number,
+        // A name, or the local part of an address — never the address itself.
+        // A review must not publish the reviewer's email.
+        reviewer: r.reviewer,
+      })),
+    });
+  });
+
+  /** GET /v1/sellers/me/disputes — claims raised against this seller. */
+  router.add('GET', '/v1/sellers/me/disputes', async (ctx) => {
+    const seller = await requireSeller(ctx);
+
+    const rows = await ctx.db.query<{
+      id: string;
+      order_id: string;
+      order_number: string;
+      reason_code: string;
+      description: string | null;
+      state: string;
+      refund_paise: string | null;
+      evidence_due_at: string | null;
+      created_at: string;
+    }>(
+      `select d.id, d.order_id, o.order_number, d.reason_code, d.description, d.state,
+              d.refund_paise::text as refund_paise,
+              d.evidence_due_at::text as evidence_due_at,
+              d.created_at::text as created_at
+         from disputes d
+         join orders o on o.id = d.order_id
+        where o.seller_id = $1
+        order by d.created_at desc
+        limit 100`,
+      [seller.id],
+    );
+
+    return json({
+      disputes: rows.rows.map((d) => ({
+        id: d.id,
+        orderId: d.order_id,
+        orderNumber: d.order_number,
+        reasonCode: d.reason_code,
+        description: d.description,
+        state: d.state,
+        refundInr: d.refund_paise === null ? null : Number(d.refund_paise) / 100,
+        evidenceDueAt: d.evidence_due_at,
+        createdAt: d.created_at,
+      })),
+    });
+  });
+
   /**
    * GET /v1/sellers/me/dashboard — everything the seller's own page shows.
    *
@@ -489,6 +569,27 @@ export function registerSellerRoutes(router: Router, database: Database): void {
       [seller.id],
     );
 
+
+    // A rating is only meaningful once somebody has left one, so the count
+    // travels with the average — "4.8" from a single review says much less
+    // than the same figure from two hundred, and the page needs to say which.
+    const reviewStats = await ctx.db.query<{ n: string; avg: string | null }>(
+      `select count(*)::text as n, avg(rating)::text as avg
+         from reviews where subject_seller_id = $1`,
+      [seller.id],
+    );
+
+    const disputeStats = await ctx.db.query<Record<string, string>>(
+      `select count(*)::text as total,
+              count(*) filter (
+                where d.state not in ('closed','resolved_buyer','resolved_seller')
+              )::text as open
+         from disputes d
+         join orders o on o.id = d.order_id
+        where o.seller_id = $1`,
+      [seller.id],
+    );
+
     const c = counts.rows[0] ?? {};
     const s = sales.rows[0] ?? {};
     const a = auctions.rows[0] ?? {};
@@ -528,6 +629,19 @@ export function registerSellerRoutes(router: Router, database: Database): void {
           ended: n(a, 'ended'),
           bids: n(a, 'bids'),
         },
+      },
+      reviews: (() => {
+        const r = reviewStats.rows[0];
+        const n = Number(r?.n ?? 0);
+        return {
+          count: n,
+          // Null rather than zero: no reviews is not a rating of nothing.
+          average: n === 0 || r?.avg == null ? null : Math.round(Number(r.avg) * 10) / 10,
+        };
+      })(),
+      disputes: {
+        open: Number(disputeStats.rows[0]?.['open'] ?? 0),
+        total: Number(disputeStats.rows[0]?.['total'] ?? 0),
       },
       salesSeries: series.rows.map((r) => ({
         day: r.day,

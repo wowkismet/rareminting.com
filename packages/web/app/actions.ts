@@ -656,6 +656,17 @@ export async function removeFromCart(data: FormData): Promise<void> {
   revalidatePath('/cart');
 }
 
+/**
+ * Redraw the page a form was submitted from.
+ *
+ * Only ever a same-site path: the value arrives in a hidden field, so anything
+ * that is not a plain absolute path is ignored rather than followed.
+ */
+function revalidateFrom(data: FormData): void {
+  const from = text(data, 'from');
+  if (from.startsWith('/') && !from.startsWith('//')) revalidatePath(from);
+}
+
 export async function saveForLater(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');
@@ -671,6 +682,9 @@ export async function saveForLater(data: FormData): Promise<void> {
   });
   revalidatePath('/saved');
   revalidatePath(`/listing/${listingId}`);
+  // The heart can be clicked from a grid rather than the listing itself, and
+  // that grid has to redraw or the heart springs back to empty.
+  revalidateFrom(data);
 }
 
 export async function removeFromSaved(data: FormData): Promise<void> {
@@ -682,6 +696,8 @@ export async function removeFromSaved(data: FormData): Promise<void> {
 
   await api(`/v1/saved/${listingId}`, { method: 'DELETE', token });
   revalidatePath('/saved');
+  revalidatePath(`/listing/${listingId}`);
+  revalidateFrom(data);
 }
 
 export async function moveSavedToCart(data: FormData): Promise<void> {

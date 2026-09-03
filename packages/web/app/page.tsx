@@ -3,7 +3,7 @@ import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
-import { currentUser } from '@/lib/session.ts';
+import { currentUser, sessionToken } from '@/lib/session.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +36,56 @@ const OCCASIONS: readonly { emoji: string; label: string; href: string }[] = [
   { emoji: '🇮🇳', label: 'Independence Day', href: '/?date=1947-08-15' },
   { emoji: '🎉', label: 'Republic Day', href: '/?date=1950-01-26' },
   { emoji: '🕊️', label: 'Gandhi Jayanti', href: '/?date=1869-10-02' },
+];
+
+/**
+ * What a buyer is actually covered by.
+ *
+ * Every claim here is one the site can stand behind today, and each links to
+ * the page that sets out the terms — a promise a visitor cannot go and read is
+ * worth nothing. Deliberately absent: any claim about authentication or
+ * grading by us. Sellers state a grade and we do not yet verify it, so saying
+ * otherwise would be the most damaging sentence on the page.
+ */
+const ASSURANCES: readonly {
+  emoji: string;
+  title: string;
+  blurb: string;
+  href: string;
+  linkLabel: string;
+}[] = [
+  {
+    emoji: '🛡️',
+    title: 'Payment held',
+    blurb:
+      'Your money is held until the note reaches you and the inspection window has closed. The seller is paid after delivery, not before.',
+    href: '/how-it-works',
+    linkLabel: 'How it works',
+  },
+  {
+    emoji: '🪪',
+    title: 'Sellers are verified',
+    blurb:
+      'Every seller passes PAN and Aadhaar checks before they can publish. Their identity numbers are never stored — only a one-way fingerprint.',
+    href: '/terms',
+    linkLabel: 'The terms',
+  },
+  {
+    emoji: '↩️',
+    title: 'Claims within the window',
+    blurb:
+      'A wrong serial, damage, a condition materially worse than stated, or a note that never arrives. Authenticity can be raised at any time.',
+    href: '/refunds',
+    linkLabel: 'Refunds and cancellations',
+  },
+  {
+    emoji: '📦',
+    title: 'Insured delivery',
+    blurb:
+      'Notes travel insured and tracked, and higher-value lots require an unboxing recording before a claim can be settled.',
+    href: '/shipping',
+    linkLabel: 'Shipping and delivery',
+  },
 ];
 
 /**
@@ -176,12 +226,25 @@ export default async function Home({
   const user = await currentUser();
   const target = parseIsoDate(params.date);
 
-  const [dated, floor] = await Promise.all([
+  // The saved list is only fetched for somebody signed in — a visitor who
+  // cannot save anything is shown no hearts rather than hearts that bounce
+  // them to a sign-in form.
+  const token = user === null ? null : await sessionToken();
+
+  const [dated, floor, saved] = await Promise.all([
     target === null
       ? null
       : api<{ exact?: ApiListing[]; dayMonth?: ApiListing[] }>(`/v1/listings?date=${target.iso}`),
     api<{ listings: ApiListing[]; total?: number }>('/v1/listings?limit=6'),
+    token === null
+      ? null
+      : api<{ items: { listingId: string }[] }>('/v1/saved', { token }),
   ]);
+
+  const savedIds = new Set(
+    saved !== null && saved.ok ? saved.data.items.map((i) => i.listingId) : [],
+  );
+  const savePath = target === null ? '/' : `/?date=${target.iso}`;
 
   const results: Found | null =
     target === null || dated === null || !dated.ok
@@ -422,7 +485,13 @@ export default async function Home({
             <>
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {listings.map((listing) => (
-                  <ListingCard key={listing.id} listing={listing} />
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    {...(user === null
+                      ? {}
+                      : { saved: savedIds.has(listing.id), savePath })}
+                  />
                 ))}
               </div>
               {total > listings.length && (
@@ -435,6 +504,35 @@ export default async function Home({
               )}
             </>
           )}
+        </section>
+
+        {/* Assurances.
+            Each one is a thing the site actually does, and each links to the
+            page that sets out the terms. A reassurance a visitor cannot go and
+            read is just decoration. */}
+        <section className="mb-16">
+          <SectionHeading
+            overline="Trusted. Secure. Collector first."
+            title="What you are covered by"
+            lead="Every one of these is written down, and each links to the terms it comes from."
+          />
+          <ul className="grid gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line sm:grid-cols-2 lg:grid-cols-4">
+            {ASSURANCES.map((a) => (
+              <li key={a.title} className="bg-sand-raised p-5">
+                <span aria-hidden className="text-2xl">
+                  {a.emoji}
+                </span>
+                <h3 className="mt-3 font-display text-lg text-slate">{a.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-slate-dim">{a.blurb}</p>
+                <a
+                  href={a.href}
+                  className="mt-3 inline-block font-mono text-[11px] uppercase tracking-[0.18em] text-accent-deep underline-offset-4 hover:underline"
+                >
+                  {a.linkLabel}
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
 
         {/* Sell.

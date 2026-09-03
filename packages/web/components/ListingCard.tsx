@@ -1,4 +1,5 @@
 import type { ApiListing } from '@/lib/api.ts';
+import { SaveHeart } from '@/components/SaveHeart.tsx';
 
 /**
  * A listing, as a card.
@@ -6,14 +7,31 @@ import type { ApiListing } from '@/lib/api.ts';
  * Always a link: every card the site shows is something a visitor can actually
  * open and buy. Shared by the homepage and the browse grid so a note looks the
  * same wherever it is met.
+ *
+ * The heart, when shown, is a sibling of that link rather than inside it — a
+ * button nested in an anchor is invalid and browsers disagree about which one
+ * a click belongs to.
  */
-export function ListingCard({ listing, badge }: { listing: ApiListing; badge?: string }) {
+export function ListingCard({
+  listing,
+  badge,
+  saved,
+  savePath,
+}: {
+  listing: ApiListing;
+  badge?: string;
+  /** Whether this visitor has already saved it. Omit to hide the heart. */
+  saved?: boolean | undefined;
+  /** Path to redraw after saving. Required for the heart to appear. */
+  savePath?: string | undefined;
+}) {
   const note = listing.note;
+  const showHeart = saved !== undefined && savePath !== undefined;
 
-  return (
+  const card = (
     <a
       href={`/listing/${listing.id}`}
-      className="flex flex-col gap-3 rounded-sm border border-sand-line bg-sand-raised p-5 transition-colors hover:border-accent-deep/60"
+      className="flex h-full flex-col gap-3 rounded-sm border border-sand-line bg-sand-raised p-5 transition-colors hover:border-accent-deep/60"
     >
       {listing.imageUrl != null ? (
         <img
@@ -69,5 +87,14 @@ export function ListingCard({ listing, badge }: { listing: ApiListing; badge?: s
         </span>
       </p>
     </a>
+  );
+
+  if (!showHeart) return card;
+
+  return (
+    <div className="relative h-full">
+      {card}
+      <SaveHeart listingId={listing.id} saved={saved} from={savePath} />
+    </div>
   );
 }

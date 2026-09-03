@@ -20,20 +20,27 @@ interface AdminOverview {
   };
   alerts: {
     pendingPayoutsInr: number;
+    paidPayoutsInr: number;
     disputesOpen: number;
     kycPending: number;
     activeListings: number;
-    lowStockCount: number;
-    supportTicketsOpen: number;
   };
   salesSeries: { day: string; gmvInr: number }[];
   categoryBreakdown: { category: string; gmvInr: number; orders: number }[];
   recentOrders: { orderNumber: string; user: string; amountInr: number; status: string; date: string }[];
   topProducts: { title: string; category: string; sold: number; revenueInr: number }[];
-  sellerPerformance: { seller: string; totalSalesInr: number; orders: number; rating: number }[];
+  sellerPerformance: {
+    seller: string;
+    totalSalesInr: number;
+    orders: number;
+    rating: number | null;
+    reviewCount: number;
+  }[];
 }
 
 const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
+
+const SLICE_COLOURS = ['#1a4a2e', '#1a4a46', '#c9a84c', '#8b7355', '#d3d3d3'] as const;
 
 function KpiCard({
   label,
@@ -93,6 +100,22 @@ export default async function AdminDashboardPage() {
 
   const o = overview.data;
 
+  // Both charts divide by a total, and on a quiet month that total is zero.
+  // Work the guard out once, here, rather than letting an empty database
+  // render a chart full of NaN.
+  const peak = Math.max(0, ...o.salesSeries.map((s) => s.gmvInr));
+  const chart =
+    peak === 0 || o.salesSeries.length === 0
+      ? null
+      : o.salesSeries
+          .map(
+            (s, i) =>
+              `${(i / (o.salesSeries.length - 1 || 1)) * 800},${200 - (s.gmvInr / peak) * 160}`,
+          )
+          .join(' ');
+
+  const categoryTotal = o.categoryBreakdown.reduce((sum, c) => sum + c.gmvInr, 0);
+
   const sections: MenuSection[] = [
     {
       title: 'Dashboard',
@@ -122,7 +145,7 @@ export default async function AdminDashboardPage() {
         { href: '/admin/reviews', label: 'Reviews & Feedback' },
         { href: '/admin/reports', label: 'Reports & Analytics' },
         { href: '/admin/promotions', label: 'Promotions & Banners' },
-        { href: '/admin/support', label: 'Support Tickets', badge: o.alerts.supportTicketsOpen },
+        { href: '/admin/support', label: 'Support Tickets' },
       ],
     },
     {
@@ -147,42 +170,15 @@ export default async function AdminDashboardPage() {
       <div className="flex flex-col gap-8">
         {/* KPI Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          <KpiCard
-            label="Total GMV"
-            value={rupees(o.kpis.totalGmvInr)}
-            icon="📊"
-            trend="▲ 28.6% vs Apr 2025"
-          />
-          <KpiCard
-            label="Total Orders"
-            value={o.kpis.totalOrders.toLocaleString()}
-            icon="🛍️"
-            trend="▲ 19.4% vs Apr 2025"
-          />
-          <KpiCard
-            label="Total Users"
-            value={o.kpis.totalUsers.toLocaleString()}
-            icon="👥"
-            trend="▲ 21.7% vs Apr 2025"
-          />
-          <KpiCard
-            label="Total Sellers"
-            value={o.kpis.totalSellers.toLocaleString()}
-            icon="🏪"
-            trend="▲ 16.3% vs Apr 2025"
-          />
-          <KpiCard
-            label="Total Products"
-            value={o.kpis.totalProducts.toLocaleString()}
-            icon="📦"
-            trend="▲ 14.8% vs Apr 2025"
-          />
-          <KpiCard
-            label="Total Revenue"
-            value={rupees(o.kpis.totalRevenueInr)}
-            icon="₹"
-            trend="▲ 26.1% vs Apr 2025"
-          />
+          {/* No month-on-month trend figures. Nothing here computes them, and a
+              percentage invented for the sake of the layout is the one number
+              on this page staff would have no way to check. */}
+          <KpiCard label="Total GMV" value={rupees(o.kpis.totalGmvInr)} icon="📊" />
+          <KpiCard label="Total Orders" value={o.kpis.totalOrders.toLocaleString('en-IN')} icon="🛍️" />
+          <KpiCard label="Total Users" value={o.kpis.totalUsers.toLocaleString('en-IN')} icon="👥" />
+          <KpiCard label="Total Sellers" value={o.kpis.totalSellers.toLocaleString('en-IN')} icon="🏪" />
+          <KpiCard label="Total Products" value={o.kpis.totalProducts.toLocaleString('en-IN')} icon="📦" />
+          <KpiCard label="Total Revenue" value={rupees(o.kpis.totalRevenueInr)} icon="₹" />
         </div>
 
         {/* Sales Overview and Category Breakdown */}
@@ -199,82 +195,87 @@ export default async function AdminDashboardPage() {
                   <p className="mt-1 font-display text-xl text-slate">{rupees(o.kpis.totalRevenueInr)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-dim">Total Payouts</p>
-                  <p className="mt-1 font-display text-xl text-slate">{rupees(o.kpis.totalGmvInr * 0.8)}</p>
+                  <p className="text-xs text-slate-dim">Paid out</p>
+                  <p className="mt-1 font-display text-xl text-slate">{rupees(o.alerts.paidPayoutsInr)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-dim">Net Profit</p>
-                  <p className="mt-1 font-display text-xl text-slate">{rupees(o.kpis.totalGmvInr * 0.2)}</p>
+                  <p className="text-xs text-slate-dim">Owed to sellers</p>
+                  <p className="mt-1 font-display text-xl text-slate">
+                    {rupees(o.alerts.pendingPayoutsInr)}
+                  </p>
                 </div>
               </div>
-              <svg viewBox="0 0 800 200" className="h-40 w-full">
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style={{ stopColor: '#c9a84c', stopOpacity: 0.3 }} />
-                    <stop offset="100%" style={{ stopColor: '#c9a84c', stopOpacity: 0 }} />
-                  </linearGradient>
-                </defs>
-                <polyline
-                  points={o.salesSeries.map((s, i) => `${(i / o.salesSeries.length) * 800},${200 - (s.gmvInr / Math.max(...o.salesSeries.map(x => x.gmvInr))) * 160}`).join(' ')}
-                  fill="none"
-                  stroke="#c9a84c"
-                  strokeWidth="2"
-                />
-                <polygon
-                  points={`0,200 ${o.salesSeries.map((s, i) => `${(i / o.salesSeries.length) * 800},${200 - (s.gmvInr / Math.max(...o.salesSeries.map(x => x.gmvInr))) * 160}`).join(' ')} 800,200`}
-                  fill="url(#gradient)"
-                />
-              </svg>
+              {chart === null ? (
+                <p className="py-10 text-center text-sm text-slate-dim">
+                  No sales in the last thirty days.
+                </p>
+              ) : (
+                <svg viewBox="0 0 800 200" className="h-40 w-full" role="img" aria-label="Sales over the last thirty days">
+                  <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" style={{ stopColor: '#c9a84c', stopOpacity: 0.3 }} />
+                      <stop offset="100%" style={{ stopColor: '#c9a84c', stopOpacity: 0 }} />
+                    </linearGradient>
+                  </defs>
+                  <polygon points={`0,200 ${chart} 800,200`} fill="url(#gradient)" />
+                  <polyline points={chart} fill="none" stroke="#c9a84c" strokeWidth="2" />
+                </svg>
+              )}
             </div>
           </Panel>
 
           <Panel title="Sales by Category">
-            <div className="space-y-4">
-              <svg viewBox="0 0 120 120" className="mx-auto h-32 w-32">
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="30" />
-                {o.categoryBreakdown.map((cat, i) => {
-                  const total = o.categoryBreakdown.reduce((sum, c) => sum + c.gmvInr, 0);
-                  const percent = (cat.gmvInr / total) * 100;
-                  const startAngle = o.categoryBreakdown.slice(0, i).reduce((sum, c) => sum + (c.gmvInr / total) * 100, 0);
-                  const circumference = 2 * Math.PI * 50;
-                  const offset = (startAngle / 100) * circumference;
-                  const length = (percent / 100) * circumference;
-                  const colors = ['#1a4a2e', '#1a4a46', '#c9a84c', '#8b7355', '#d3d3d3'];
-                  return (
-                    <circle
-                      key={i}
-                      cx="60"
-                      cy="60"
-                      r="50"
-                      fill="none"
-                      stroke={colors[i % colors.length]}
-                      strokeWidth="30"
-                      strokeDasharray={`${length} ${circumference}`}
-                      strokeDashoffset={-offset}
-                      style={{ transform: 'rotate(-90deg)', transformOrigin: '60px 60px' }}
-                    />
-                  );
-                })}
-                <circle cx="60" cy="60" r="35" fill="white" />
-                <text x="60" y="55" textAnchor="middle" className="font-mono text-xs font-bold">
-                  Total GMV
-                </text>
-                <text x="60" y="70" textAnchor="middle" className="font-display text-lg font-bold">
-                  {rupees(o.kpis.totalGmvInr)}
-                </text>
-              </svg>
-              <div className="space-y-2 text-sm">
-                {o.categoryBreakdown.map((cat, i) => {
-                  const colors = ['■ #1a4a2e', '■ #1a4a46', '■ #c9a84c', '■ #8b7355', '■ #d3d3d3'];
-                  return (
-                    <div key={i} className="flex justify-between">
-                      <span className="text-slate-dim">{cat.category}</span>
-                      <span className="text-slate">{rupees(cat.gmvInr)} ({((cat.gmvInr / o.kpis.totalGmvInr) * 100).toFixed(1)}%)</span>
+            {categoryTotal === 0 ? (
+              <p className="py-10 text-center text-sm text-slate-dim">
+                Nothing sold yet, so there is no split to show.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <svg viewBox="0 0 120 120" className="mx-auto h-32 w-32" role="img" aria-label="Sales by category">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="30" />
+                  {o.categoryBreakdown.map((cat, i) => {
+                    const circumference = 2 * Math.PI * 50;
+                    const before = o.categoryBreakdown
+                      .slice(0, i)
+                      .reduce((sum, c) => sum + c.gmvInr, 0);
+                    const offset = (before / categoryTotal) * circumference;
+                    const length = (cat.gmvInr / categoryTotal) * circumference;
+                    return (
+                      <circle
+                        key={cat.category}
+                        cx="60"
+                        cy="60"
+                        r="50"
+                        fill="none"
+                        stroke={SLICE_COLOURS[i % SLICE_COLOURS.length]}
+                        strokeWidth="30"
+                        strokeDasharray={`${length} ${circumference}`}
+                        strokeDashoffset={-offset}
+                        style={{ transform: 'rotate(-90deg)', transformOrigin: '60px 60px' }}
+                      />
+                    );
+                  })}
+                  <circle cx="60" cy="60" r="35" fill="white" />
+                </svg>
+                <div className="space-y-2 text-sm">
+                  {o.categoryBreakdown.map((cat, i) => (
+                    <div key={cat.category} className="flex items-baseline justify-between gap-2">
+                      <span className="flex items-center gap-2 text-slate-dim">
+                        <span
+                          aria-hidden="true"
+                          className="inline-block h-2 w-2 rounded-full"
+                          style={{ backgroundColor: SLICE_COLOURS[i % SLICE_COLOURS.length] }}
+                        />
+                        {cat.category}
+                      </span>
+                      <span className="tabular-nums text-slate">
+                        {rupees(cat.gmvInr)} ({((cat.gmvInr / categoryTotal) * 100).toFixed(1)}%)
+                      </span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </Panel>
         </div>
 
@@ -346,7 +347,13 @@ export default async function AdminDashboardPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm tabular-nums text-slate">{rupees(seller.totalSalesInr)}</p>
-                      <p className="text-xs text-accent">{'★'.repeat(Math.floor(seller.rating))}</p>
+                      <p className="text-xs text-accent">
+                        {seller.rating === null ? (
+                          <span className="text-slate-dim">unrated</span>
+                        ) : (
+                          `${seller.rating} ★ (${seller.reviewCount})`
+                        )}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -357,12 +364,13 @@ export default async function AdminDashboardPage() {
 
         {/* Alert Tiles */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Low stock and support tickets are absent by design: every listing
+              is one of a kind, so stock has no meaning here, and there is no
+              ticketing system to count. */}
           <AlertTile label="Pending Payouts" value={rupees(o.alerts.pendingPayoutsInr)} icon="💳" href="/admin/payments" />
           <AlertTile label="Disputes" value={o.alerts.disputesOpen} icon="⚠️" href="/admin/orders" />
           <AlertTile label="KYC Pending" value={o.alerts.kycPending} icon="👤" href="/admin/kyc" />
-          <AlertTile label="Active Listings" value={o.alerts.activeListings.toLocaleString()} icon="📋" href="/admin/products" />
-          <AlertTile label="Low Stock Alerts" value={o.alerts.lowStockCount} icon="📦" href="/admin/products" />
-          <AlertTile label="Support Tickets" value={o.alerts.supportTicketsOpen} icon="☎️" href="/admin/support" />
+          <AlertTile label="Active Listings" value={o.alerts.activeListings.toLocaleString('en-IN')} icon="📋" href="/admin/products" />
         </div>
 
         {/* Quick Actions */}

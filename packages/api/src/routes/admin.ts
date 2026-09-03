@@ -82,15 +82,22 @@ export function registerAdminRoutes(router: Router): void {
          (select count(*) from orders)::text                                   as orders,
          (select count(*) from sellers where kyc_state = 'pending')::text      as kyc_pending,
          (select count(*) from sellers where kyc_state = 'under_review')::text as kyc_review,
+         (select count(*) from review_queue
+            where state in ('queued','assigned'))::text                        as review_open,
          (select count(*) from disputes
             where state not in ('closed','resolved_buyer','resolved_seller'))::text as disputes_open`,
     );
 
-    // Financial metrics
+    // Financial metrics.
+    //
+    // Revenue is the commission actually recorded on each order, not the rate
+    // applied to the total after the fact: the rate has changed once already,
+    // and orders written under the old one must keep the figure they were
+    // charged.
     const financial = await ctx.db.query<{ gmv: string; revenue: string }>(
       `select
-         coalesce(sum(total_paise), 0)::text as gmv,
-         coalesce(sum(total_paise) * 0.20, 0)::text as revenue
+         coalesce(sum(total_paise), 0)::text                                as gmv,
+         coalesce(sum(commission_paise + gst_on_commission_paise), 0)::text as revenue
          from orders where state not in ('cancelled','refunded')`,
     );
 
@@ -150,14 +157,22 @@ export function registerAdminRoutes(router: Router): void {
     );
 
     // Seller performance
+    // The rating is a scalar subquery rather than a join: joining reviews would
+    // multiply the order rows and inflate every sales figure on this table.
     const sellerPerf = await ctx.db.query<{
       display_name: string;
       total_sales: string;
       orders_count: string;
+      rating: string | null;
+      review_count: string;
     }>(
       `select s.display_name,
               coalesce(sum(o.total_paise), 0)::text as total_sales,
-              count(o.id)::text as orders_count
+              count(o.id)::text as orders_count,
+              (select avg(r.rating)::text from reviews r
+                where r.subject_seller_id = s.id) as rating,
+              (select count(*)::text from reviews r
+                where r.subject_seller_id = s.id) as review_count
          from sellers s
          left join orders o on o.seller_id = s.id
                            and o.state not in ('cancelled','refunded')
@@ -165,17 +180,22 @@ export function registerAdminRoutes(router: Router): void {
         order by total_sales desc limit 10`,
     );
 
-    // Alert data
+    // Alert data.
+    //
+    // Support tickets and stock levels are deliberately absent: there is no
+    // ticketing table and listings are one-of-a-kind, so neither has a real
+    // number behind it. An invented one on a console staff act on is worse
+    // than an empty space.
     const alerts = await ctx.db.query<Record<string, string>>(
       `select
          (select count(*) from payouts where state = 'pending')::text as pending_payouts,
          (select coalesce(sum(amount_paise), 0)::text from payouts where state = 'pending') as payout_amount,
+         (select coalesce(sum(amount_paise), 0)::text from payouts where state = 'paid')    as payout_paid,
          (select count(*) from disputes
             where state not in ('closed','resolved_buyer','resolved_seller'))::text as open_disputes,
          (select count(*) from sellers
             where kyc_state in ('pending','under_review'))::text as kyc_pending_count,
-         (select count(*) from listings where state = 'minted')::text as active_listings,
-         (select count(*) from support_tickets where state = 'open')::text as open_tickets`,
+         (select count(*) from listings where state = 'minted')::text as active_listings`,
     );
 
     const cnt = (counts.rows[0] ?? {}) as Record<string, string>;
@@ -185,6 +205,19 @@ export function registerAdminRoutes(router: Router): void {
     const rupees = (k: string): number => Number(fin[k] ?? 0) / 100;
 
     return json({
+      // The flat counts this endpoint has always returned. Kept alongside the
+      // richer shape below rather than folded into it: they are the documented
+      // contract, and moving them would break every existing caller silently.
+      users: n('users'),
+      sellers: n('sellers'),
+      kycPending: n('kyc_pending') + n('kyc_review'),
+      listings: n('products'),
+      listingsLive: n('listings_live'),
+      listingsDraft: n('listings_draft'),
+      orders: n('orders'),
+      reviewOpen: n('review_open'),
+      disputesOpen: n('disputes_open'),
+
       kpis: {
         totalGmvInr: rupees('gmv'),
         totalOrders: n('orders'),
@@ -195,11 +228,10 @@ export function registerAdminRoutes(router: Router): void {
       },
       alerts: {
         pendingPayoutsInr: Number(alrt['payout_amount'] ?? 0) / 100,
+        paidPayoutsInr: Number(alrt['payout_paid'] ?? 0) / 100,
         disputesOpen: n('disputes_open'),
         kycPending: n('kyc_pending') + n('kyc_review'),
         activeListings: n('listings_live'),
-        lowStockCount: 74, // placeholder
-        supportTicketsOpen: Number(alrt['open_tickets'] ?? 0),
       },
       salesSeries: series.rows.map((r) => ({
         day: r.day,
@@ -227,7 +259,9 @@ export function registerAdminRoutes(router: Router): void {
         seller: r.display_name,
         totalSalesInr: Number(r.total_sales) / 100,
         orders: Number(r.orders_count),
-        rating: 4.8, // placeholder
+        // Null, not zero: an unrated seller is not a badly rated one.
+        rating: r.rating === null ? null : Math.round(Number(r.rating) * 10) / 10,
+        reviewCount: Number(r.review_count),
       })),
     });
   });

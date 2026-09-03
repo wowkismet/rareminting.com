@@ -474,6 +474,226 @@ export function registerAdminRoutes(router: Router): void {
     return json({ id, state });
   });
 
+  /**
+   * GET /v1/admin/users — the account list.
+   *
+   * No password hash, no consent record and no last-seen timestamp: staff
+   * looking up an account to help somebody need none of the three, and each is
+   * a thing that leaks if this list is ever left open.
+   */
+  router.add('GET', '/v1/admin/users', async (ctx) => {
+    await requireAdmin(ctx);
+    const q = ctx.url.searchParams.get('q');
+
+    const rows = await ctx.db.query<{
+      id: string;
+      email: string;
+      full_name: string | null;
+      status: string;
+      email_verified: boolean;
+      phone_e164: string | null;
+      created_at: string;
+      roles: string | null;
+      orders: string;
+      is_seller: boolean;
+    }>(
+      `select u.id, u.email, u.full_name, u.status,
+              (u.email_verified_at is not null) as email_verified,
+              u.phone_e164, u.created_at::text as created_at,
+              (select string_agg(r.role::text, ',') from user_roles r where r.user_id = u.id) as roles,
+              (select count(*) from orders o where o.buyer_id = u.id)::text as orders,
+              exists (select 1 from sellers s where s.user_id = u.id) as is_seller
+         from users u
+        where ($1::text is null
+               or u.email ilike '%' || $1 || '%'
+               or coalesce(u.full_name, '') ilike '%' || $1 || '%')
+        order by u.created_at desc
+        limit 200`,
+      [q],
+    );
+
+    return json({
+      users: rows.rows.map((r) => ({
+        id: r.id,
+        email: r.email,
+        fullName: r.full_name,
+        status: r.status,
+        emailVerified: r.email_verified,
+        mobile: r.phone_e164 === null ? null : maskMobile(r.phone_e164),
+        roles: r.roles === null ? [] : r.roles.split(','),
+        orders: Number(r.orders),
+        isSeller: r.is_seller,
+        createdAt: r.created_at,
+      })),
+    });
+  });
+
+  /** GET /v1/admin/orders — every order, newest first. */
+  router.add('GET', '/v1/admin/orders', async (ctx) => {
+    await requireAdmin(ctx);
+    const state = ctx.url.searchParams.get('state');
+
+    const rows = await ctx.db.query<{
+      id: string;
+      order_number: string;
+      state: string;
+      total_paise: string;
+      created_at: string;
+      buyer_email: string;
+      seller_name: string;
+      title: string | null;
+    }>(
+      `select o.id, o.order_number, o.state, o.total_paise::text as total_paise,
+              o.created_at::text as created_at,
+              u.email as buyer_email, s.display_name as seller_name, l.title
+         from orders o
+         join users u   on u.id = o.buyer_id
+         join sellers s on s.id = o.seller_id
+         left join listings l on l.id = o.listing_id
+        where ($1::text is null or o.state = $1::order_state)
+        order by o.created_at desc
+        limit 200`,
+      [state],
+    );
+
+    return json({
+      orders: rows.rows.map((r) => ({
+        id: r.id,
+        orderNumber: r.order_number,
+        state: r.state,
+        totalInr: Number(r.total_paise) / 100,
+        buyer: r.buyer_email,
+        seller: r.seller_name,
+        title: r.title,
+        createdAt: r.created_at,
+      })),
+    });
+  });
+
+  /**
+   * GET /v1/admin/transactions — money in, as the gateway reported it.
+   *
+   * The gateway's own payment id travels with each row: it is the reference
+   * both sides quote when a payment has to be traced, and without it a
+   * reconciliation is guesswork.
+   */
+  router.add('GET', '/v1/admin/transactions', async (ctx) => {
+    await requireAdmin(ctx);
+
+    const rows = await ctx.db.query<{
+      id: string;
+      order_number: string;
+      gateway: string;
+      gateway_payment_id: string | null;
+      method: string | null;
+      amount_paise: string;
+      state: string;
+      failure_reason: string | null;
+      created_at: string;
+    }>(
+      `select p.id, o.order_number, p.gateway, p.gateway_payment_id, p.method,
+              p.amount_paise::text as amount_paise, p.state, p.failure_reason,
+              p.created_at::text as created_at
+         from payments p
+         join orders o on o.id = p.order_id
+        order by p.created_at desc
+        limit 200`,
+    );
+
+    return json({
+      transactions: rows.rows.map((r) => ({
+        id: r.id,
+        orderNumber: r.order_number,
+        gateway: r.gateway,
+        gatewayPaymentId: r.gateway_payment_id,
+        method: r.method,
+        amountInr: Number(r.amount_paise) / 100,
+        state: r.state,
+        failureReason: r.failure_reason,
+        createdAt: r.created_at,
+      })),
+    });
+  });
+
+  /** GET /v1/admin/reviews — what buyers said, across every seller. */
+  router.add('GET', '/v1/admin/reviews', async (ctx) => {
+    await requireAdmin(ctx);
+
+    const rows = await ctx.db.query<{
+      id: string;
+      rating: number;
+      body: string | null;
+      created_at: string;
+      order_number: string;
+      seller_name: string;
+      reviewer: string;
+    }>(
+      `select r.id, r.rating, r.body, r.created_at::text as created_at,
+              o.order_number, s.display_name as seller_name,
+              coalesce(u.full_name, split_part(u.email, '@', 1)) as reviewer
+         from reviews r
+         join orders o  on o.id = r.order_id
+         join sellers s on s.id = r.subject_seller_id
+         join users u   on u.id = r.reviewer_id
+        order by r.created_at desc
+        limit 200`,
+    );
+
+    return json({
+      reviews: rows.rows.map((r) => ({
+        id: r.id,
+        rating: r.rating,
+        body: r.body,
+        orderNumber: r.order_number,
+        seller: r.seller_name,
+        reviewer: r.reviewer,
+        createdAt: r.created_at,
+      })),
+    });
+  });
+
+  /** GET /v1/admin/categories — the catalogue tree, with how much sits in each. */
+  router.add('GET', '/v1/admin/categories', async (ctx) => {
+    await requireAdmin(ctx);
+
+    const rows = await ctx.db.query<{
+      id: string;
+      slug: string;
+      name: string;
+      kind: string;
+      parent_name: string | null;
+      sort_order: number;
+      description: string | null;
+    }>(
+      `select c.id, c.slug, c.name, c.kind, p.name as parent_name,
+              c.sort_order, c.description
+         from categories c
+         left join categories p on p.id = c.parent_id
+        order by c.sort_order asc, c.name asc
+        limit 500`,
+    );
+
+    // Listings carry a kind rather than a category id, so the count is by kind
+    // and is reported as such rather than dressed up as a per-category total.
+    const byKind = await ctx.db.query<{ kind: string; n: string }>(
+      `select kind, count(*)::text as n from listings group by kind`,
+    );
+    const counts = new Map(byKind.rows.map((r) => [r.kind, Number(r.n)]));
+
+    return json({
+      categories: rows.rows.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        kind: r.kind,
+        parent: r.parent_name,
+        sortOrder: r.sort_order,
+        description: r.description,
+        listingsOfKind: counts.get(r.kind) ?? 0,
+      })),
+    });
+  });
+
   /** GET /v1/admin/audit — the trail, newest first. */
   router.add('GET', '/v1/admin/audit', async (ctx) => {
     await requireAdmin(ctx);

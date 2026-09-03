@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { DashboardShell, type MenuSection } from '@/components/DashboardShell.tsx';
-import { Panel, StatCard } from '@/components/DashboardPanels.tsx';
+import { DashboardShell } from '@/components/DashboardShell.tsx';
+import { Panel } from '@/components/DashboardPanels.tsx';
+import { adminMenu } from '@/lib/admin-dashboard.ts';
 import { api } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
 
@@ -123,47 +124,7 @@ export default async function AdminDashboardPage() {
 
   const categoryTotal = o.categoryBreakdown.reduce((sum, c) => sum + c.gmvInr, 0);
 
-  const sections: MenuSection[] = [
-    {
-      title: 'Dashboard',
-      items: [{ href: '/admin', label: 'Overview' }],
-    },
-    {
-      title: 'Management',
-      items: [
-        { href: '/admin/users', label: 'Users Management' },
-        { href: '/admin/sellers', label: 'Sellers Management', badge: o.alerts.kycPending },
-        { href: '/admin/products', label: 'Products & Listings' },
-        { href: '/admin/orders', label: 'Orders Management' },
-      ],
-    },
-    {
-      title: 'Platform',
-      items: [
-        { href: '/admin/payments', label: 'Payments & Payouts' },
-        { href: '/admin/kyc', label: 'KYC Verification' },
-        { href: '/admin/transactions', label: 'Transactions' },
-        { href: '/admin/categories', label: 'Categories' },
-      ],
-    },
-    {
-      title: 'Content',
-      items: [
-        { href: '/admin/reviews', label: 'Reviews & Feedback' },
-        { href: '/admin/reports', label: 'Reports & Analytics' },
-        { href: '/admin/promotions', label: 'Promotions & Banners' },
-        { href: '/admin/support', label: 'Support Tickets' },
-      ],
-    },
-    {
-      title: 'System',
-      items: [
-        { href: '/admin/settings', label: 'System Settings' },
-        { href: '/admin/audit', label: 'Audit Logs' },
-        { href: '/admin/backup', label: 'Backup & Security' },
-      ],
-    },
-  ];
+  const sections = adminMenu({ kycPending: o.alerts.kycPending, disputesOpen: o.alerts.disputesOpen });
 
   return (
     <DashboardShell

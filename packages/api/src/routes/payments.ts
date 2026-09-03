@@ -25,6 +25,7 @@ import { one, type Database } from '../db.ts';
 import {
   createGatewayOrder,
   checkoutSignatureValid,
+  fetchOrderPayments,
   paymentFromWebhook,
   razorpayConfig,
   RazorpayError,
@@ -343,4 +344,66 @@ async function applyPaymentEvent(
 
     return false;
   });
+}
+
+/**
+ * Ask Razorpay what really happened to an order, and apply it.
+ *
+ * Webhooks are best-effort. A delivery can be lost, the receiver can be down
+ * for a minute, a secret can be mismatched after somebody rotates it — and
+ * when that happens the money has still moved. An integration that only
+ * listens will eventually take a buyer's payment and leave their order sitting
+ * unpaid, which is the worst failure this system has: the buyer is out of
+ * pocket and the site says they owe money.
+ *
+ * So the gateway is polled as well as listened to. It goes through the same
+ * applyPaymentEvent as a webhook, which means the same amount check, the same
+ * idempotency, the same audit line — a reconciled payment is indistinguishable
+ * from a delivered one, and running this twice changes nothing.
+ *
+ * Returns whether anything changed.
+ */
+export async function reconcileOrder(
+  ctx: Ctx,
+  database: Database,
+  orderId: string,
+): Promise<boolean> {
+  const config = razorpayConfig();
+  if (config === null) return false;
+
+  const rows = await ctx.db.query<{ gateway_order_id: string }>(
+    `select p.gateway_order_id
+       from payments p
+       join orders o on o.id = p.order_id
+      where p.order_id = $1
+        and p.gateway_order_id is not null
+        and p.state in ('created', 'authorized')
+        and o.state in ('created', 'payment_pending')`,
+    [orderId],
+  );
+
+  let changed = false;
+  for (const row of rows.rows) {
+    let payments;
+    try {
+      payments = await fetchOrderPayments(config, row.gateway_order_id);
+    } catch (error) {
+      // A gateway that cannot be reached is not a reason to fail the page the
+      // buyer is looking at. Log it and leave the order as it stands.
+      console.error('[razorpay] reconcile failed for', row.gateway_order_id, error);
+      continue;
+    }
+
+    for (const payment of payments) {
+      // Only a captured payment moves an order. An authorised-but-uncaptured
+      // one is money held, not money taken.
+      if (payment.status !== 'captured') continue;
+      if (await applyPaymentEvent(ctx, database, 'payment.captured', payment, JSON.stringify(payment))) {
+        console.log(`[razorpay] reconciled ${payment.id} for order ${orderId}`);
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
 }

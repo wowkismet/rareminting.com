@@ -17,6 +17,7 @@ import { badRequest, conflict, forbidden, notFound, unauthorized } from '../erro
 import { asObject, oneOf, optionalString } from '../validate.ts';
 import { one, type Database } from '../db.ts';
 import { computeBreakdown, DEFAULT_RATES, type Rates } from '../money.ts';
+import { reconcileOrder } from './payments.ts';
 
 const OFFER_RESPONSES = ['accepted', 'declined'] as const;
 
@@ -230,6 +231,13 @@ export function registerOrderRoutes(router: Router, database: Database): void {
     if (ctx.session === null) throw unauthorized();
     const id = ctx.params['id'] ?? '';
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('No such order.');
+
+    // Before showing an order, ask the gateway whether it was in fact paid.
+    // A missed webhook would otherwise leave a buyer looking at "awaiting
+    // payment" for something they have already been charged for — the worst
+    // failure this system has. Cheap in practice: it only calls out when an
+    // order is still pending and has a payment attempt outstanding.
+    await reconcileOrder(ctx, database, id);
 
     const result = await ctx.db.query<Record<string, string>>(
       `select o.id, o.order_number, o.state,

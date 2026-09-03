@@ -218,3 +218,54 @@ export function paymentFromWebhook(body: unknown): WebhookPayment | null {
       typeof e['error_description'] === 'string' ? e['error_description'] : null,
   };
 }
+
+/**
+ * Fetch the payments Razorpay holds against one of our gateway orders.
+ *
+ * The counterpart to the webhook, and the reason reconciliation is possible at
+ * all: the gateway always knows the truth, even when its notification never
+ * arrived. Webhooks are best-effort — a delivery can be lost, a receiver can be
+ * down, a secret can be mismatched — so a payment integration that only listens
+ * will eventually take somebody's money without noticing.
+ */
+export async function fetchOrderPayments(
+  config: RazorpayConfig,
+  gatewayOrderId: string,
+): Promise<WebhookPayment[]> {
+  const auth = Buffer.from(`${config.keyId}:${config.keySecret}`).toString('base64');
+  const response = await fetch(
+    `https://api.razorpay.com/v1/orders/${encodeURIComponent(gatewayOrderId)}/payments`,
+    { headers: { authorization: `Basic ${auth}` } },
+  );
+
+  const text = await response.text();
+  if (!response.ok) {
+    console.error('[razorpay] payment lookup failed:', response.status, text);
+    throw new RazorpayError('Could not reach the payment provider.', 502);
+  }
+
+  let parsed: { items?: unknown[] };
+  try {
+    parsed = JSON.parse(text) as typeof parsed;
+  } catch {
+    throw new RazorpayError('The payment provider returned something unreadable.', 502);
+  }
+
+  const items = Array.isArray(parsed.items) ? parsed.items : [];
+  return items
+    .map((entity) => {
+      if (typeof entity !== 'object' || entity === null) return null;
+      const e = entity as Record<string, unknown>;
+      if (typeof e['id'] !== 'string' || typeof e['amount'] !== 'number') return null;
+      return {
+        id: e['id'],
+        orderId: typeof e['order_id'] === 'string' ? e['order_id'] : null,
+        amountPaise: e['amount'],
+        method: typeof e['method'] === 'string' ? e['method'] : null,
+        status: typeof e['status'] === 'string' ? e['status'] : 'unknown',
+        errorDescription:
+          typeof e['error_description'] === 'string' ? e['error_description'] : null,
+      } satisfies WebhookPayment;
+    })
+    .filter((p): p is WebhookPayment => p !== null);
+}

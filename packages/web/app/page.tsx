@@ -505,22 +505,55 @@ export default async function Home({
           </section>
         )}
 
-        {/* How it works */}
+        {/* The floor */}
         <section className="mb-16">
           <SectionHeading
-            overline="How it works"
-            title="How Rare Minting works"
-            lead="Finding a note that carries your date is simple, and it starts with the date rather than the note."
+            overline="The Floor"
+            title={listings.length === 0 ? 'The floor is opening' : 'Recently listed'}
+            lead={
+              listings.length === 0
+                ? undefined
+                : 'Notes on sale now, each one findable by the date its serial reads as.'
+            }
           />
-          <ol className="grid list-none gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line p-0 md:grid-cols-3">
-            {STEPS.map((step) => (
-              <li key={step.n} className="flex flex-col gap-3 bg-sand-raised p-6">
-                <span className="font-mono text-2xl tabular-nums text-accent-deep">{step.n}</span>
-                <h3 className="font-display text-xl text-slate">{step.title}</h3>
-                <p className="text-sm leading-relaxed text-slate-dim">{step.body}</p>
-              </li>
-            ))}
-          </ol>
+
+          {listings.length === 0 ? (
+            <div className="rounded-sm border border-sand-line bg-sand-raised p-10 text-center">
+              <p className="font-display text-2xl text-slate">No notes are for sale yet.</p>
+              <p className="mx-auto mt-3 max-w-md text-sm text-slate-dim">
+                Sellers are being verified now. If you have a note with a serial worth finding, you
+                can be among the first to list it.
+              </p>
+              <a
+                href="/sell"
+                className="mt-7 inline-block rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+              >
+                Sell a note
+              </a>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {listings.map((listing) => (
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    {...(user === null
+                      ? {}
+                      : { saved: savedIds.has(listing.id), savePath })}
+                  />
+                ))}
+              </div>
+              {total > listings.length && (
+                <a
+                  href="/browse"
+                  className="mt-8 inline-block rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
+                >
+                  Browse all {total} notes
+                </a>
+              )}
+            </>
+          )}
         </section>
 
         {/* Occasions — all of them dates */}
@@ -585,55 +618,22 @@ export default async function Home({
           </div>
         </section>
 
-        {/* The floor */}
+        {/* How it works */}
         <section className="mb-16">
           <SectionHeading
-            overline="The Floor"
-            title={listings.length === 0 ? 'The floor is opening' : 'Recently listed'}
-            lead={
-              listings.length === 0
-                ? undefined
-                : 'Notes on sale now, each one findable by the date its serial reads as.'
-            }
+            overline="How it works"
+            title="How Rare Minting works"
+            lead="Finding a note that carries your date is simple, and it starts with the date rather than the note."
           />
-
-          {listings.length === 0 ? (
-            <div className="rounded-sm border border-sand-line bg-sand-raised p-10 text-center">
-              <p className="font-display text-2xl text-slate">No notes are for sale yet.</p>
-              <p className="mx-auto mt-3 max-w-md text-sm text-slate-dim">
-                Sellers are being verified now. If you have a note with a serial worth finding, you
-                can be among the first to list it.
-              </p>
-              <a
-                href="/sell"
-                className="mt-7 inline-block rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
-              >
-                Sell a note
-              </a>
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {listings.map((listing) => (
-                  <ListingCard
-                    key={listing.id}
-                    listing={listing}
-                    {...(user === null
-                      ? {}
-                      : { saved: savedIds.has(listing.id), savePath })}
-                  />
-                ))}
-              </div>
-              {total > listings.length && (
-                <a
-                  href="/browse"
-                  className="mt-8 inline-block rounded-full border border-sand-line px-6 py-2.5 text-sm text-slate transition-colors hover:border-accent-deep"
-                >
-                  Browse all {total} notes
-                </a>
-              )}
-            </>
-          )}
+          <ol className="grid list-none gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line p-0 md:grid-cols-3">
+            {STEPS.map((step) => (
+              <li key={step.n} className="flex flex-col gap-3 bg-sand-raised p-6">
+                <span className="font-mono text-2xl tabular-nums text-accent-deep">{step.n}</span>
+                <h3 className="font-display text-xl text-slate">{step.title}</h3>
+                <p className="text-sm leading-relaxed text-slate-dim">{step.body}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
         {/* Assurances.

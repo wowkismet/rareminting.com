@@ -429,8 +429,11 @@ export default async function Home({
           </div>
         </section>
 
-        {/* Collections — patterns in the serial, not dates */}
-        <section className="mb-16">
+        {/* Collections — patterns in the serial, not dates.
+            Anchored, because the header links here: there is no /collections
+            page, and a nav item pointing at one that does not exist is exactly
+            the dead link this menu is meant not to have. */}
+        <section id="collections" className="mb-16 scroll-mt-6">
           <SectionHeading
             overline="Collections"
             title="Notes worth having for the number alone"

@@ -1,5 +1,6 @@
 import type { DateInterpretation } from '@rareminting/serial-engine';
 import { formatInr, type CatalogueEntry } from '@/lib/catalogue.ts';
+import { formatDayFirst, formatDayMonth } from '@/lib/search.ts';
 import { SerialPlate } from './SerialPlate.tsx';
 
 const ERA_LABEL: Record<string, string> = {
@@ -54,7 +55,9 @@ export function NoteCard({
         <p className="text-sm text-slate">
           Reads as{' '}
           <span className="font-mono text-accent-deep">
-            {shown.isPartial ? shown.iso.replace('--', '') : shown.iso}
+            {shown.isPartial
+              ? formatDayMonth(shown.day, shown.month)
+              : formatDayFirst(shown.iso)}
           </span>
           {shown.era !== null && (
             <span className="text-slate-dim"> · {ERA_LABEL[shown.era] ?? shown.era}</span>

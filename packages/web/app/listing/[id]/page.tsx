@@ -6,6 +6,7 @@ import { NotePhotos, PhotoUpload } from '@/components/NotePhotos.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
+import { formatDayFirst, formatDayMonth } from '@/lib/search.ts';
 import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { loadSellerOrNull, sellerMenu } from '@/lib/seller-dashboard.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
@@ -168,7 +169,9 @@ export default async function ListingPage({
                   className="flex flex-wrap items-baseline justify-between gap-3 rounded-sm border border-sand-line bg-sand-raised px-4 py-3"
                 >
                   <span className="font-mono text-slate">
-                    {d.isPartial ? `${d.day}/${d.month} (no year)` : d.iso}
+                    {d.isPartial || d.iso === null
+                      ? `${formatDayMonth(d.day, d.month)} (no year)`
+                      : formatDayFirst(d.iso)}
                   </span>
                   <span className="text-xs text-slate-dim">
                     {d.era !== null && `${ERA[d.era] ?? d.era} · `}

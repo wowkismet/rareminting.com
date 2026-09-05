@@ -1,4 +1,5 @@
 import type { ApiListing } from '@/lib/api.ts';
+import { formatDayFirst, formatDayMonth } from '@/lib/search.ts';
 import { SaveHeart } from '@/components/SaveHeart.tsx';
 
 /**
@@ -73,7 +74,10 @@ export function ListingCard({
 
       {listing.match !== undefined && (
         <p className="font-mono text-xs text-accent-deep">
-          Matches {listing.match.iso ?? `${listing.match.day}/${listing.match.month}`}
+          Matches{' '}
+          {listing.match.iso === null || listing.match.iso === undefined
+            ? formatDayMonth(listing.match.day, listing.match.month)
+            : formatDayFirst(listing.match.iso)}
         </p>
       )}
 

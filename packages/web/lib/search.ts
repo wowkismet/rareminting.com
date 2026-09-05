@@ -96,6 +96,31 @@ export function formatLongDate(iso: string): string {
   return `${parsed.day} ${MONTHS[parsed.month - 1] ?? ''} ${parsed.year}`;
 }
 
+/**
+ * A date the way it is written in India, and the way the serial spells it.
+ *
+ * This matters more here than as a regional preference. A serial of 190609
+ * reads as 19-06-2009; shown in ISO as 2009-06-19 the digits appear
+ * rearranged, and the whole premise of the site — that the number on the note
+ * *is* the date — stops being visible on the one page where it is being
+ * explained.
+ *
+ * Zero-padded so a column of them lines up, and so 09-06 is never mistaken
+ * for 9 June read the other way round.
+ */
+export function formatDayFirst(iso: string): string {
+  const parsed = parseIsoDate(iso);
+  if (parsed === null) return iso;
+  const dd = String(parsed.day).padStart(2, '0');
+  const mm = String(parsed.month).padStart(2, '0');
+  return `${dd}-${mm}-${parsed.year}`;
+}
+
+/** A day and month with no year behind them, as DD-MM. */
+export function formatDayMonth(day: number, month: number): string {
+  return `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}`;
+}
+
 /** Dates with something worth showing, used for the quick-pick chips. */
 export const SUGGESTED_DATES: readonly { iso: string; label: string }[] = [
   { iso: '1947-08-15', label: 'Independence Day' },

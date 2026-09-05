@@ -38,6 +38,41 @@ const OCCASIONS: readonly { emoji: string; label: string; href: string }[] = [
   { emoji: '🕊️', label: 'Gandhi Jayanti', href: '/?date=1869-10-02' },
 ];
 
+/** Icons for the suggested dates, in the same order. */
+const DATE_ICONS = ['🇮🇳', '🎉', '🎂', '❤️'] as const;
+
+/** "15 Aug 1947" — short enough to sit under a label without wrapping. */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * The ways people actually arrive at a note.
+ *
+ * Every tile is a filter the engine really supports. The design also showed
+ * rare coins, error notes and international banknotes; there is no filter
+ * behind any of the three — coins exist as a kind but nothing filters by kind,
+ * and the other two are not modelled at all — so a tile for them would look
+ * like a category and behave like a link to everything.
+ */
+const EXPLORE: readonly { icon: string; label: string; sub: string; href: string }[] = [
+  { icon: '📅', label: 'Date match', sub: 'Notes that spell a date', href: '#date' },
+  { icon: '💎', label: 'Fancy numbers', sub: 'Solids, radars, ladders', href: '/browse?pattern=unique' },
+  { icon: '⭐', label: 'Star notes', sub: 'Replacements, scarcer', href: '/browse?pattern=star' },
+  { icon: '🔢', label: 'Low serials', sub: 'First off the press', href: '/browse?pattern=low-serial' },
+  { icon: '🪞', label: 'Radars', sub: 'Reads both ways', href: '/browse?pattern=radar' },
+  { icon: '🎯', label: 'Solids', sub: 'Every digit the same', href: '/browse?pattern=solid' },
+  { icon: '🍀', label: 'Lucky numbers', sub: '786, 108 and more', href: '/browse?pattern=lucky' },
+  { icon: '▦', label: 'Everything', sub: 'The whole floor', href: '/browse' },
+];
+
 /**
  * What a buyer is actually covered by.
  *
@@ -307,33 +342,113 @@ export default async function Home({
               </button>
             </form>
 
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {SUGGESTED_DATES.map((suggestion) => (
+            {/* The dates people look for most, each showing the date it will
+                actually search so nobody has to guess what "Republic Day"
+                resolves to. The last opens the field above rather than
+                searching, because only you know your own date. */}
+            <div className="mt-8 grid w-full max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-sm border border-line bg-line/60 sm:grid-cols-3 lg:grid-cols-5">
+              {SUGGESTED_DATES.map((suggestion, i) => (
                 <a
                   key={suggestion.iso}
                   href={`/?date=${suggestion.iso}`}
-                  className="rounded-full border border-line px-4 py-1.5 font-mono text-[11px] text-cream-dim transition-colors hover:border-accent hover:text-accent-bright focus-visible:border-accent focus-visible:text-accent-bright"
+                  className="flex items-center gap-3 bg-ink/50 px-4 py-3 text-left transition-colors hover:bg-ink/80"
                 >
-                  {suggestion.label}
+                  <span aria-hidden className="text-lg text-accent">
+                    {DATE_ICONS[i] ?? '📅'}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs text-cream">{suggestion.label}</span>
+                    <span className="block font-mono text-[10px] text-cream-dim">
+                      {shortDate(suggestion.iso)}
+                    </span>
+                  </span>
                 </a>
               ))}
+              <a
+                href="#date"
+                className="flex items-center gap-3 bg-ink/50 px-4 py-3 text-left transition-colors hover:bg-ink/80"
+              >
+                <span aria-hidden className="text-lg text-accent">
+                  🗓️
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs text-cream">Choose your date</span>
+                  <span className="block font-mono text-[10px] text-cream-dim">Pick any date</span>
+                </span>
+              </a>
             </div>
           </section>
         </div>
 
         <div className="border-t border-line/70 bg-ink/40">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-2 px-5 py-4 font-mono text-[11px] uppercase tracking-[0.2em] text-cream-dim">
-            <span>
-              {total} {total === 1 ? 'note' : 'notes'} for sale
-            </span>
-            <span>Every serial read for its dates</span>
-            <span>Payment held until you have the note</span>
+          <div className="mx-auto grid max-w-6xl gap-px bg-line/40 px-0 sm:grid-cols-3">
+            {(
+              [
+                ['◎', String(total), total === 1 ? 'Note for sale' : 'Notes for sale'],
+                ['⊙', 'Every serial', 'Read for its dates'],
+                ['⛨', 'Secure payment', 'Held until you have the note'],
+              ] as const
+            ).map(([icon, head, sub]) => (
+              <div key={sub} className="flex items-center justify-center gap-3 bg-ink/40 px-5 py-4">
+                <span
+                  aria-hidden
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-accent/40 text-accent"
+                >
+                  {icon}
+                </span>
+                <span>
+                  <span className="block text-sm text-cream">{head}</span>
+                  <span className="block font-mono text-[10px] uppercase tracking-[0.16em] text-cream-dim">
+                    {sub}
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {/* ---------- Light zone ---------- */}
       <main className="mx-auto max-w-6xl px-5 py-16">
+        {/* Explore. The first thing under the fold, because somebody who did
+            not arrive with a date in mind needs a way in that is not a
+            search box. */}
+        <section className="mb-16">
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
+                Explore what moves you
+              </p>
+              <p className="mt-2 text-sm text-slate-dim">
+                Find notes by what makes them worth having.
+              </p>
+            </div>
+            <a
+              href="/browse"
+              className="rounded-full border border-sand-line px-5 py-2 text-sm text-slate transition-colors hover:border-accent-deep"
+            >
+              View all
+            </a>
+          </div>
+
+          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
+            {EXPLORE.map((e) => (
+              <li key={e.label}>
+                <a
+                  href={e.href}
+                  className="flex h-full flex-col items-center gap-2 rounded-sm border border-sand-line bg-sand-raised p-4 text-center transition-colors hover:border-accent-deep/60"
+                >
+                  <span aria-hidden className="text-2xl">
+                    {e.icon}
+                  </span>
+                  <span className="text-xs leading-tight text-slate">{e.label}</span>
+                  <span className="text-[10px] leading-tight text-slate-dim">{e.sub}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         {results !== null && (
           <section className="mb-16">
             <SectionHeading
@@ -433,28 +548,40 @@ export default async function Home({
             Anchored, because the header links here: there is no /collections
             page, and a nav item pointing at one that does not exist is exactly
             the dead link this menu is meant not to have. */}
-        <section id="collections" className="mb-16 scroll-mt-6">
-          <SectionHeading
-            overline="Collections"
-            title="Notes worth having for the number alone"
-            lead="Some serials are collectible whatever date they spell. Every serial listed here is read for these the moment it goes up."
-          />
-          <div className="grid gap-px overflow-hidden rounded-sm border border-sand-line bg-sand-line sm:grid-cols-2 lg:grid-cols-3">
-            {COLLECTIONS.map((c) => (
-              <a
-                key={c.label}
-                href={c.href}
-                className="flex items-start gap-4 bg-sand-raised p-5 transition-colors hover:bg-sand"
-              >
-                <span aria-hidden className="text-2xl">
-                  {c.emoji}
-                </span>
-                <span>
-                  <span className="block font-display text-lg text-slate">{c.label}</span>
-                  <span className="mt-1 block text-xs text-slate-dim">{c.blurb}</span>
-                </span>
-              </a>
-            ))}
+        {/* Collections, on the dark ground the design gives them. Full-bleed
+            out of the centred column so the band reaches both edges, which is
+            what separates it from the sections either side. */}
+        <section
+          id="collections"
+          className="mb-16 scroll-mt-6 -mx-5 bg-primary px-5 py-12 md:-mx-[calc((100vw-min(72rem,100vw))/2)] md:px-[calc((100vw-min(72rem,100vw))/2)]"
+        >
+          <div className="mx-auto max-w-6xl">
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
+              Collections worth having
+            </p>
+            <p className="mt-2 text-sm text-cream-dim">
+              Notes worth more for the number they carry.
+            </p>
+
+            <ul className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-8">
+              {COLLECTIONS.slice(0, 8).map((c) => (
+                <li key={c.label}>
+                  <a
+                    href={c.href}
+                    className="group flex h-full flex-col items-center gap-2 text-center"
+                  >
+                    <span
+                      aria-hidden
+                      className="flex h-14 w-14 items-center justify-center rounded-full border border-accent/30 text-2xl transition-colors group-hover:border-accent group-hover:bg-accent/10"
+                    >
+                      {c.emoji}
+                    </span>
+                    <span className="text-xs leading-tight text-accent-bright">{c.label}</span>
+                    <span className="text-[10px] leading-tight text-cream-dim">{c.blurb}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 

@@ -28,6 +28,9 @@ const ITEM_KINDS = [
   'bond',
   'share_certificate',
   'ephemera',
+  'jewellery',
+  'precious_stone',
+  'antique',
   'other',
 ] as const;
 
@@ -37,6 +40,9 @@ const KIND_LABEL: Record<string, string> = {
   bond: 'Bond',
   share_certificate: 'Share certificate',
   ephemera: 'Ephemera',
+  jewellery: 'Jewellery',
+  precious_stone: 'Precious stone',
+  antique: 'Antique',
   other: 'Collectible',
 };
 

@@ -121,6 +121,13 @@ server {
     listen [::]:80;
     server_name __DOMAINS__;
 
+    # A listing is a photograph of a banknote taken on a phone, which is
+    # routinely 1.5-3 MB. Nginx defaults to 1 MB and rejects the upload with a
+    # 413 before it ever reaches the application, so nothing is logged there
+    # and the seller sees only a blank error. This one line is the difference
+    # between a seller being able to list an item and not.
+    client_max_body_size 25m;
+
     # Next.js emits immutable, content-hashed asset filenames.
     location /_next/static/ {
         proxy_pass http://127.0.0.1:__PORT__;

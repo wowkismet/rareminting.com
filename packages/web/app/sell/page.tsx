@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { createCollectible, createListing, registerSeller } from '@/app/actions.ts';
 import { ActionForm, Field, Select } from '@/components/Forms.tsx';
+import { PhotoInput } from '@/components/PhotoInput.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { DashboardShell } from '@/components/DashboardShell.tsx';
@@ -102,26 +103,6 @@ function SaleModeFields({
         </div>
       </div>
     </>
-  );
-}
-
-function PhotoField() {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
-        Photograph<span className="ml-2 normal-case tracking-normal">optional</span>
-      </span>
-      <input
-        type="file"
-        name="photo"
-        accept="image/jpeg,image/png,image/webp"
-        className="text-sm text-slate file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:text-cream"
-      />
-      <span className="text-xs text-slate-dim">
-        Buyers decide on the picture. Photograph it flat, in daylight, with the serial legible. You
-        can add more from your dashboard afterwards.
-      </span>
-    </label>
   );
 }
 
@@ -276,7 +257,7 @@ export default async function SellPage({
               />
 
               <SaleModeFields suggestedStart="1000" defaultMode={saleMode} />
-              <PhotoField />
+              <PhotoInput />
               <Field label="Anything else worth knowing" name="description" />
             </ActionForm>
 
@@ -344,7 +325,7 @@ export default async function SellPage({
                 />
                 <Select label="Condition" name="grade" options={GRADES} defaultValue="XF" />
                 <SaleModeFields suggestedStart="1000" defaultMode={saleMode} />
-              <PhotoField />
+              <PhotoInput />
               <Field label="Anything else worth knowing" name="description" />
               </ActionForm>
             </div>

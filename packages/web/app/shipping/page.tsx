@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 export default function ShippingPage() {
   return (
     <PolicyPage
+      current="/shipping"
       eyebrow="Shipping"
       title="Shipping &amp; delivery"
       intro={

@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <PolicyPage
+      current="/terms"
       eyebrow="Terms"
       title="Terms of use"
       intro={

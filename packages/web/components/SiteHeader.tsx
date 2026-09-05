@@ -25,8 +25,22 @@ const LINKS = [
   { href: '/auctions', label: 'Auctions' },
   { href: '/sell', label: 'Sell' },
   { href: '/#collections', label: 'Collections' },
-  { href: '/how-it-works', label: 'Resources' },
-  { href: '/about', label: 'About us' },
+] as const;
+
+/**
+ * What sits under Resources.
+ *
+ * The four policies belong in the header as well as the footer: somebody
+ * deciding whether to spend twenty thousand rupees on a banknote should not
+ * have to scroll to the bottom of the page to find the refund terms.
+ */
+const RESOURCES = [
+  { href: '/how-it-works', label: 'How it works' },
+  { href: '/shipping', label: 'Shipping & delivery' },
+  { href: '/refunds', label: 'Refunds & cancellations' },
+  { href: '/terms', label: 'Terms of use' },
+  { href: '/privacy', label: 'Privacy policy' },
+  { href: '/contact', label: 'Contact & grievances' },
 ] as const;
 
 /** A count on an icon, shown only when there is something to count. */
@@ -87,6 +101,37 @@ export async function SiteHeader({
               {link.label}
             </a>
           ))}
+
+          {/* A details element rather than a scripted menu: it opens on click,
+              closes on Escape, and is reachable by keyboard without a line of
+              JavaScript. */}
+          <details className="group relative">
+            <summary className="cursor-pointer list-none font-mono text-[11px] uppercase tracking-[0.14em] text-cream-dim transition-colors marker:content-none hover:text-accent-bright">
+              Resources
+              <span aria-hidden className="ml-1 inline-block transition-transform group-open:rotate-180">
+                ▾
+              </span>
+            </summary>
+            <ul className="absolute left-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-sm border border-line bg-primary py-1 shadow-lg">
+              {RESOURCES.map((r) => (
+                <li key={r.href}>
+                  <a
+                    href={r.href}
+                    className="block px-4 py-2 text-sm text-cream-dim transition-colors hover:bg-cream/10 hover:text-accent-bright"
+                  >
+                    {r.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </details>
+
+          <a
+            href="/about"
+            className="font-mono text-[11px] uppercase tracking-[0.14em] text-cream-dim transition-colors hover:text-accent-bright"
+          >
+            About us
+          </a>
         </nav>
 
         {/* Everything a visitor acts with, gathered on the right. */}

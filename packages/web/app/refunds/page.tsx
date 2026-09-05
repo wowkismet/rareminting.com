@@ -21,6 +21,7 @@ const {
 export default function RefundsPage() {
   return (
     <PolicyPage
+      current="/refunds"
       eyebrow="Refunds"
       title="Refunds &amp; cancellations"
       intro={

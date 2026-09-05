@@ -317,8 +317,21 @@ export default async function Home({
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
               Date matching, read from the serial
             </p>
-            <h1 className="mt-4 max-w-3xl font-display text-4xl leading-[1.1] text-cream sm:text-6xl">
-              Find the note that tells your story.
+            {/* Set in the wordmark's own face — Playfair Display — and in
+                capitals, so the headline reads as part of the logo rather
+                than as text placed underneath it.
+
+                Uppercased in CSS rather than typed in capitals: the sentence
+                stays a sentence in the markup, which is what a screen reader
+                and a search engine are given. Capitals need the extra
+                letter-spacing or the high-contrast serif closes up. */}
+            <h1 className="mt-4 max-w-3xl font-display uppercase leading-[1.05] text-cream">
+              <span className="block text-2xl tracking-[0.1em] sm:text-4xl">
+                Find the note that
+              </span>
+              <span className="mt-2 block text-4xl tracking-[0.04em] text-accent sm:text-6xl">
+                Tells your story.
+              </span>
             </h1>
             <p className="mt-6 max-w-xl text-cream-dim">
               Every banknote holds a story. We read the serial number of every note listed here for

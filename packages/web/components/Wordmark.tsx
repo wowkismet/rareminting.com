@@ -3,8 +3,15 @@ import Image from 'next/image';
 /**
  * The Rare Minting logo.
  *
- * The white lockup: crown over the M, wordmark, and the rule beneath, on a
- * transparent ground so it sits on the deep green without a box behind it.
+ * The lockup in antique gold (#c9a84c, the accent token): crown over the M,
+ * wordmark, and the rule beneath, on a transparent ground so it sits on the
+ * deep green without a box behind it.
+ *
+ * Recoloured from the white master rather than redrawn, so the alpha — and
+ * with it the glow and every anti-aliased edge — is exactly the artwork's own.
+ * Only the interior shading is scaled; the body of the mark is the brand hex
+ * to the byte. The flat colour also compresses to a quarter of the white
+ * version's size.
  * `next/image` serves it resized and in a modern format per device, which
  * matters here — the source is a 2048px master and no visitor needs that.
  *
@@ -22,7 +29,7 @@ export function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
   return (
     <Image
-      src="/rare-minting-logo-white.png"
+      src="/rare-minting-logo-gold.png"
       alt="Rare Minting"
       width={2048}
       height={768}

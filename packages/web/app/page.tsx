@@ -270,7 +270,12 @@ export default async function Home({
     target === null
       ? null
       : api<{ exact?: ApiListing[]; dayMonth?: ApiListing[] }>(`/v1/listings?date=${target.iso}`),
-    api<{ listings: ApiListing[]; total?: number }>('/v1/listings?limit=6'),
+    // A hundred, shuffled on every load. Newest-first meant a seller who
+    // listed last month never reached the front page again however good the
+    // note; this gives every listing a turn. The cards lazy-load their
+    // photographs, so a visitor who does not scroll downloads only the first
+    // screenful.
+    api<{ listings: ApiListing[]; total?: number }>('/v1/listings?limit=100&sort=random'),
     token === null
       ? null
       : api<{ items: { listingId: string }[] }>('/v1/saved', { token }),
@@ -507,13 +512,17 @@ export default async function Home({
 
         {/* The floor */}
         <section className="mb-16">
+          {/* Not "Recently listed" any more: the order is shuffled on every
+              load, so the newest note is no more likely to be first than the
+              oldest. Naming it accurately costs nothing; leaving the old
+              label would have quietly told every visitor something untrue. */}
           <SectionHeading
             overline="The Floor"
-            title={listings.length === 0 ? 'The floor is opening' : 'Recently listed'}
+            title={listings.length === 0 ? 'The floor is opening' : 'Notes for sale'}
             lead={
               listings.length === 0
                 ? undefined
-                : 'Notes on sale now, each one findable by the date its serial reads as.'
+                : 'Every note on sale now, in a different order each time you look. Each one is findable by the date its serial reads as.'
             }
           />
 

@@ -432,6 +432,27 @@ export function registerListingRoutes(router: Router, database: Database): void 
         throw badRequest('Unknown pattern.', { pattern: 'unknown' });
       }
 
+      /**
+       * Newest first, or shuffled.
+       *
+       * Shuffled exists so the homepage does not show the same handful of
+       * notes to everybody: with newest-first, a seller who listed last month
+       * is never on the front page again, however good the note. Randomising
+       * gives every listing a turn.
+       *
+       * `order by random()` sorts the whole matching set, which is nothing at
+       * a hundred listings and would matter at a hundred thousand. When that
+       * day comes the fix is to sample rather than sort — TABLESAMPLE, or a
+       * random offset — not to quietly drop the feature.
+       *
+       * The clause is chosen between two fixed strings rather than built from
+       * the parameter, so nothing a caller sends reaches the query.
+       */
+      const orderBy =
+        ctx.url.searchParams.get('sort') === 'random'
+          ? 'random()'
+          : 'l.published_at desc nulls last';
+
       const rows = await ctx.db.query<
         ListingRow & { thumb: string | null } & Partial<NoteRow>
       >(
@@ -446,7 +467,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
             and ($2::text[] is null or exists (
                   select 1 from listing_pattern_tags lt
                    where lt.listing_id = l.id and lt.tag_code = any($2::text[])))
-          order by l.published_at desc nulls last
+          order by ${orderBy}
           limit $1`,
         [limit, codes],
       );

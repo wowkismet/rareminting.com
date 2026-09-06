@@ -643,6 +643,9 @@ export async function addToCart(data: FormData): Promise<void> {
   await api('/v1/cart', { method: 'POST', token, body: { listingId } });
   revalidatePath('/cart');
   revalidatePath(`/listing/${listingId}`);
+  // Added from a grid rather than the listing itself, that grid has to redraw
+  // or the cart count in the header stays where it was.
+  revalidateFrom(data);
 }
 
 export async function removeFromCart(data: FormData): Promise<void> {

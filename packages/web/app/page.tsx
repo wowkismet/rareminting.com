@@ -560,9 +560,8 @@ export default async function Home({
                   <ListingCard
                     key={listing.id}
                     listing={listing}
-                    {...(user === null
-                      ? {}
-                      : { saved: savedIds.has(listing.id), savePath })}
+                    fromPath={savePath}
+                    {...(user === null ? {} : { saved: savedIds.has(listing.id) })}
                   />
                 ))}
               </div>

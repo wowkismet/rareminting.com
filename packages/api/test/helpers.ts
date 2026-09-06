@@ -64,9 +64,15 @@ export async function createRig(): Promise<Rig> {
  * pattern_tags is reference data seeded by migration and must survive.
  */
 export async function reset(pg: PGlite): Promise<void> {
+  // order_groups hangs off the buyer rather than a listing, so it does not get
+  // swept up by the cascade from listings the way orders does — and its
+  // reference to users is `restrict`, deliberately, because a buyer with
+  // financial records against them must not be deletable. Naming it here is
+  // what lets the delete below still succeed.
   await pg.exec(`
     truncate login_attempts, sessions, user_roles, audit_logs,
              date_matches, listing_pattern_tags, notes, listings,
+             order_items, orders, order_groups,
              kyc_documents, otp_challenges, sellers
       restart identity cascade;
     delete from users;

@@ -251,8 +251,14 @@ async function applyPaymentEvent(
     // Lock the payment row so two concurrent deliveries of the same event
     // cannot both pass the state check.
     const found = one(
-      await tx.query<{ id: string; order_id: string; state: string; amount_paise: string }>(
-        `select id, order_id, state, amount_paise::text as amount_paise
+      await tx.query<{
+        id: string;
+        order_id: string | null;
+        group_id: string | null;
+        state: string;
+        amount_paise: string;
+      }>(
+        `select id, order_id, group_id, state, amount_paise::text as amount_paise
            from payments
           where gateway_order_id = $1
           for update`,
@@ -311,11 +317,28 @@ async function applyPaymentEvent(
       if (updated.rows.length === 0) return false;
 
       // Move the order on, but only from a state that is waiting for money.
+      //
+      // A basket paid for in one go carries a group rather than an order, and
+      // every seller's part of it clears together. One card charge cannot
+      // sensibly leave half the basket unpaid.
       await tx.query(
         `update orders
             set state = 'paid'
-          where id = $1 and state in ('created', 'payment_pending')`,
-        [found.order_id],
+          where state in ('created', 'payment_pending')
+            and (id = $1::uuid
+                 or ($2::uuid is not null and group_id = $2::uuid))`,
+        [found.order_id, found.group_id],
+      );
+
+      await tx.query(
+        `update order_items i
+            set state = 'paid'
+           from orders o
+          where i.order_id = o.id
+            and i.state in ('created', 'payment_pending')
+            and (o.id = $1::uuid
+                 or ($2::uuid is not null and o.group_id = $2::uuid))`,
+        [found.order_id, found.group_id],
       );
 
       await tx.query(

@@ -1,6 +1,7 @@
 import { SUGGESTED_DATES, formatLongDate, parseIsoDate } from '@/lib/search.ts';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
+import { FamousDates } from '@/components/FamousDates.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
@@ -555,8 +556,12 @@ export default async function Home({
             </div>
           ) : (
             <>
+              {/* The band sits between rows rather than after everything, so
+                  somebody scrolling the floor meets it. Split into two grids
+                  rather than spanning a column, which keeps it full width
+                  whatever the breakpoint. */}
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {listings.map((listing) => (
+                {listings.slice(0, 6).map((listing) => (
                   <ListingCard
                     key={listing.id}
                     listing={listing}
@@ -565,6 +570,23 @@ export default async function Home({
                   />
                 ))}
               </div>
+
+              <div className="my-8">
+                <FamousDates />
+              </div>
+
+              {listings.length > 6 && (
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {listings.slice(6).map((listing) => (
+                    <ListingCard
+                      key={listing.id}
+                      listing={listing}
+                      fromPath={savePath}
+                      {...(user === null ? {} : { saved: savedIds.has(listing.id) })}
+                    />
+                  ))}
+                </div>
+              )}
               {total > listings.length && (
                 <a
                   href="/browse"

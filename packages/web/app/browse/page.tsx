@@ -34,19 +34,30 @@ const COLLECTION_LABEL: Record<string, string> = {
 export default async function BrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; pattern?: string }>;
+  searchParams: Promise<{ date?: string; pattern?: string; kind?: string; q?: string }>;
 }) {
   const params = await searchParams;
   const user = await currentUser();
   const date = params.date;
   const pattern = params.pattern;
+  const kind = params.kind?.trim() ?? '';
+  const q = params.q?.trim() ?? '';
 
-  const path =
-    date !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(date)
-      ? `/v1/listings?date=${date}`
-      : pattern !== undefined && /^[a-zA-Z_-]{1,24}$/.test(pattern)
-        ? `/v1/listings?limit=48&pattern=${encodeURIComponent(pattern)}`
-        : '/v1/listings?limit=48';
+  // A date search has its own shape — exact matches and near ones — so it
+  // takes precedence. Everything else composes: a kind and a search term can
+  // narrow the floor together.
+  let path: string;
+  if (date !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    path = `/v1/listings?date=${date}`;
+  } else {
+    const search = new URLSearchParams({ limit: '48' });
+    if (pattern !== undefined && /^[a-zA-Z_-]{1,24}$/.test(pattern)) {
+      search.set('pattern', pattern);
+    }
+    if (/^[a-z_]{1,24}$/.test(kind)) search.set('kind', kind);
+    if (q !== '') search.set('q', q.slice(0, 80));
+    path = `/v1/listings?${search.toString()}`;
+  }
 
   const result = await api<
     { listings: ApiListing[] } & { exact?: ApiListing[]; dayMonth?: ApiListing[] }
@@ -59,6 +70,28 @@ export default async function BrowsePage({
   const collectionLabel =
     pattern === undefined ? null : (COLLECTION_LABEL[pattern.toLowerCase()] ?? pattern);
 
+  // The heading has to say what is being shown, or a filtered floor looks like
+  // an empty one.
+  const KIND_LABEL: Record<string, string> = {
+    banknote: 'Rare notes',
+    coin: 'Rare coins',
+    jewellery: 'Antique jewellery',
+    precious_stone: 'Precious stones',
+    antique: 'Antiques',
+    stamp: 'Stamps',
+    bond: 'Bonds',
+    share_certificate: 'Share certificates',
+    ephemera: 'Ephemera',
+    other: 'Collectibles',
+  };
+
+  const heading =
+    date !== undefined
+      ? `Notes for ${date}`
+      : q !== ''
+        ? `Matching “${q}”${kind !== '' ? ` in ${(KIND_LABEL[kind] ?? kind).toLowerCase()}` : ''}`
+        : (collectionLabel ?? KIND_LABEL[kind] ?? 'Notes for sale');
+
   return (
     <div>
       <SiteHeader user={user} compact />
@@ -69,7 +102,7 @@ export default async function BrowsePage({
             The Floor
           </p>
           <h1 className="mt-2 font-display text-3xl text-slate sm:text-4xl">
-            {date !== undefined ? `Notes for ${date}` : (collectionLabel ?? 'Notes for sale')}
+            {heading}
           </h1>
         </div>
 

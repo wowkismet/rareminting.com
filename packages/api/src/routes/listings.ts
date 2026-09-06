@@ -459,6 +459,21 @@ export function registerListingRoutes(router: Router, database: Database): void 
           ? 'random()'
           : 'l.published_at desc nulls last';
 
+      // Filter by what the thing *is* — a note, a coin, a piece of jewellery.
+      // Validated against the enum rather than passed through, so an unknown
+      // kind is a clear 400 instead of a query that quietly matches nothing.
+      const kindParam = ctx.url.searchParams.get('kind');
+      if (kindParam !== null && !(ITEM_KINDS as readonly string[]).includes(kindParam)) {
+        throw badRequest('Unknown kind.', { kind: 'unknown' });
+      }
+
+      // Free text, matched against the serial and the title. Deliberately
+      // narrow: those are the two things a buyer actually types, and a
+      // description search would return a note because the word "gold"
+      // appears in a sentence about its wrapper.
+      const q = ctx.url.searchParams.get('q')?.trim();
+      const query = q === undefined || q === '' ? null : q;
+
       const rows = await ctx.db.query<
         ListingRow & { thumb: string | null } & Partial<NoteRow>
       >(
@@ -473,21 +488,32 @@ export function registerListingRoutes(router: Router, database: Database): void 
             and ($2::text[] is null or exists (
                   select 1 from listing_pattern_tags lt
                    where lt.listing_id = l.id and lt.tag_code = any($2::text[])))
+            and ($3::text is null or l.kind = $3::item_kind)
+            and ($4::text is null
+                 or n.serial_digits ilike '%' || $4 || '%'
+                 or l.title         ilike '%' || $4 || '%')
           order by ${orderBy}
           limit $1`,
-        [limit, codes],
+        [limit, codes, kindParam, query],
       );
 
       // The true number matching, not the number on this page. The homepage
       // states it out loud, so it has to be the real one.
+      // Every filter above applies here too. A count that ignores the filter
+      // it is counting under is a number that contradicts the page it sits on.
       const counted = await ctx.db.query<{ total: string }>(
         `select count(*)::text as total
            from listings l
+           left join notes n on n.listing_id = l.id
           where l.state = 'minted'
             and ($1::text[] is null or exists (
                   select 1 from listing_pattern_tags lt
-                   where lt.listing_id = l.id and lt.tag_code = any($1::text[])))`,
-        [codes],
+                   where lt.listing_id = l.id and lt.tag_code = any($1::text[])))
+            and ($2::text is null or l.kind = $2::item_kind)
+            and ($3::text is null
+                 or n.serial_digits ilike '%' || $3 || '%'
+                 or l.title         ilike '%' || $3 || '%')`,
+        [codes, kindParam, query],
       );
 
       return json({

@@ -58,15 +58,24 @@ function loadCheckout(): Promise<void> {
 
 export function PayButton({
   orderId,
+  groupId,
   amountInr,
   buyerName,
   buyerEmail,
+  label = 'Pay now',
 }: {
-  orderId: string;
+  /** One order. Give this or groupId, not both. */
+  orderId?: string;
+  /** A whole basket, paid for once. */
+  groupId?: string;
   amountInr: number;
   buyerName: string | null;
   buyerEmail: string;
+  label?: string;
 }) {
+  // A basket and a single order are the same transaction from the buyer's
+  // side; only the endpoint differs.
+  const startPath = groupId === undefined ? `/pay/${orderId}/start` : `/pay/group/${groupId}/start`;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +86,7 @@ export function PayButton({
     setMessage(null);
 
     try {
-      const started = await fetch(`/pay/${orderId}/start`, { method: 'POST' });
+      const started = await fetch(startPath, { method: 'POST' });
       const body = (await started.json()) as StartResponse & { message?: string };
 
       if (!started.ok) {

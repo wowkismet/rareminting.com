@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { buyNow, removeFromCart, saveForLater } from '@/app/actions.ts';
+import { checkoutCart } from '@/app/actions.ts';
 import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
@@ -22,7 +23,12 @@ const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
  * that, each line says plainly whether the item is still available, and one
  * that has gone cannot be bought from here.
  */
-export default async function CartPage() {
+export default async function CartPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   const user = await currentUser();
   if (user === null) redirect('/signin');
 
@@ -37,6 +43,8 @@ export default async function CartPage() {
   const items = cart.ok ? cart.data.items : [];
   const gone = items.filter((i) => !i.available);
   const buyable = items.filter((i) => i.available);
+  const unavailable = items.length - buyable.length;
+  const sellerCount = new Set(buyable.map((i) => i.sellerName)).size;
   const total = cart.ok ? (cart.data.totalInr ?? 0) : 0;
   const myOrders = orders.ok ? orders.data.orders.filter((o) => o.role !== 'seller').length : 0;
 
@@ -61,6 +69,17 @@ export default async function CartPage() {
     >
       <div className="flex flex-col gap-8">
         <BannerSlot slot="cart" />
+
+        {/* A checkout that failed says why. Nearly always somebody else bought
+            one of these first, and the buyer needs to know which. */}
+        {error !== undefined && error !== '' && (
+          <p
+            role="alert"
+            className="rounded-sm border border-ember/50 bg-ember/10 px-5 py-4 text-sm leading-relaxed text-slate"
+          >
+            {error} Nothing has been charged.
+          </p>
+        )}
 
         {items.length === 0 ? (
           <Empty action={{ href: '/browse', label: 'Find a date' }}>
@@ -160,13 +179,41 @@ export default async function CartPage() {
               ))}
             </ul>
 
-            <div className="rounded-sm border border-sand-line bg-sand-raised p-5 text-sm leading-relaxed text-slate-dim">
-              Each note is bought on its own, because each has its own seller and its own dispatch.
-              Your payment is held until the note reaches you and the{' '}
-              <a href="/refunds" className="text-accent-deep underline underline-offset-4">
-                inspection window
-              </a>{' '}
-              closes.
+            <div className="rounded-sm border border-sand-line bg-sand-raised p-5">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">
+                    One payment
+                  </p>
+                  <p className="mt-1 font-display text-2xl text-slate">{rupees(total)}</p>
+                  <p className="mt-1 text-xs text-slate-dim">
+                    {buyable.length} item{buyable.length === 1 ? '' : 's'}
+                    {sellerCount > 1 && ` from ${sellerCount} sellers`}
+                    {unavailable > 0 &&
+                      ` · ${unavailable} no longer available, and not charged for`}
+                  </p>
+                </div>
+
+                <form action={checkoutCart}>
+                  <button
+                    type="submit"
+                    disabled={buyable.length === 0}
+                    className="rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Checkout
+                  </button>
+                </form>
+              </div>
+
+              <p className="mt-4 border-t border-sand-line pt-4 text-sm leading-relaxed text-slate-dim">
+                You pay once, however many sellers are in the basket. Each note is dispatched
+                separately by its own seller, and your payment is held until it reaches you and the{' '}
+                <a href="/refunds" className="text-accent-deep underline underline-offset-4">
+                  inspection window
+                </a>{' '}
+                closes. Nothing here is reserved until you check out — if a note sells in the
+                meantime, we will tell you which one and charge you for nothing.
+              </p>
             </div>
           </>
         )}

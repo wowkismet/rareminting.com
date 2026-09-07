@@ -320,6 +320,30 @@ export async function editListing(data: FormData): Promise<void> {
   revalidatePath(`/listing/${listingId}`);
 }
 
+/**
+ * Turn the basket into one payable group.
+ *
+ * On success this lands on the group's payment page. On failure it comes back
+ * to the cart with the reason in the URL — which is nearly always "somebody
+ * else bought one of these", and the buyer needs to be told which rather than
+ * left looking at a button that did nothing.
+ */
+export async function checkoutCart(): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const result = await api<{ group: { id: string } }>('/v1/cart/checkout', {
+    method: 'POST',
+    token,
+  });
+
+  revalidatePath('/cart');
+  if (!result.ok) {
+    redirect(`/cart?error=${encodeURIComponent(result.error.message)}`);
+  }
+  redirect(`/pay/group/${result.data.group.id}`);
+}
+
 /* ------------------------------ banners ------------------------------ */
 
 export async function createBanner(data: FormData): Promise<void> {

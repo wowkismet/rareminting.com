@@ -140,6 +140,115 @@ export function registerPaymentRoutes(router: Router, database: Database): void 
   });
 
   /**
+   * POST /v1/order-groups/:id/payment — one charge for a whole basket.
+   *
+   * The same shape as paying for a single order, against the group total. The
+   * payment row carries the group rather than an order, and when it captures
+   * every seller's part of the basket clears together — one card charge cannot
+   * sensibly leave half a basket unpaid.
+   */
+  router.add('POST', '/v1/order-groups/:id/payment', async (ctx) => {
+    const session = ctx.session;
+    if (session === null) throw unauthorized();
+
+    const config = razorpayConfig();
+    if (config === null) {
+      return json(
+        {
+          error: 'payments_unavailable',
+          message: 'Payments are not switched on yet. Your order is saved and nothing was charged.',
+        },
+        503,
+      );
+    }
+
+    const id = ctx.params['id'] ?? '';
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('No such order group.');
+
+    const found = one(
+      await ctx.db.query<{
+        id: string;
+        group_number: string;
+        buyer_id: string;
+        total_paise: string;
+      }>(
+        `select id, group_number, buyer_id, total_paise::text as total_paise
+           from order_groups where id = $1`,
+        [id],
+      ),
+    );
+    if (found === null || found.buyer_id !== session.userId) throw notFound('No such order group.');
+
+    // Every order in the group must still be waiting for money. If any has
+    // moved on, this basket has already been paid for and charging again would
+    // take the money twice.
+    const states = await ctx.db.query<{ waiting: string; total: string }>(
+      `select count(*) filter (where state in ('created','payment_pending'))::text as waiting,
+              count(*)::text as total
+         from orders where group_id = $1`,
+      [id],
+    );
+    const row = states.rows[0];
+    if (row === undefined || row.total === '0') throw notFound('No such order group.');
+    if (row.waiting !== row.total) {
+      throw conflict('This basket has already been paid for.');
+    }
+
+    // Reuse an outstanding attempt rather than opening a second.
+    const existing = one(
+      await ctx.db.query<{ gateway_order_id: string | null; amount_paise: string }>(
+        `select gateway_order_id, amount_paise::text as amount_paise
+           from payments
+          where group_id = $1 and state in ('created', 'authorized')
+            and gateway_order_id is not null
+          order by created_at desc limit 1`,
+        [id],
+      ),
+    );
+
+    const amountPaise = Number(found.total_paise);
+    if (existing !== null && existing.gateway_order_id !== null) {
+      return json({
+        keyId: config.keyId,
+        gatewayOrderId: existing.gateway_order_id,
+        amountPaise: Number(existing.amount_paise),
+        currency: 'INR',
+        orderNumber: found.group_number,
+        isTest: config.isTest,
+      });
+    }
+
+    let gatewayOrder;
+    try {
+      gatewayOrder = await createGatewayOrder(config, {
+        amountPaise,
+        receipt: found.group_number,
+        notes: { group_id: found.id, group_number: found.group_number },
+      });
+    } catch (error) {
+      if (error instanceof RazorpayError) {
+        return json({ error: 'gateway_error', message: error.message }, error.status);
+      }
+      throw error;
+    }
+
+    await ctx.db.query(
+      `insert into payments (group_id, gateway, gateway_order_id, amount_paise, state)
+       values ($1, 'razorpay', $2, $3, 'created')`,
+      [found.id, gatewayOrder.id, amountPaise],
+    );
+
+    return json({
+      keyId: config.keyId,
+      gatewayOrderId: gatewayOrder.id,
+      amountPaise,
+      currency: gatewayOrder.currency,
+      orderNumber: found.group_number,
+      isTest: config.isTest,
+    });
+  });
+
+  /**
    * POST /v1/payments/checkout-callback
    *
    * What the browser reports after checkout closes. The signature proves the

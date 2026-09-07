@@ -47,7 +47,8 @@ export function buyerMenu({
       title: 'You',
       items: [
         ...(isSeller ? [{ href: '/seller', label: 'Seller dashboard' }] : []),
-        { href: '/contact', label: 'Help' },
+        { href: '/support', label: 'Help & support' },
+        { href: '/contact', label: 'Contact' },
         { href: '/refunds', label: 'Refunds' },
       ],
     },

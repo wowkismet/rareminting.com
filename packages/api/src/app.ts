@@ -22,6 +22,7 @@ import { registerAuctionRoutes } from './routes/auctions.ts';
 import { registerBasketRoutes } from './routes/basket.ts';
 import { registerBuyerRoutes } from './routes/buyer.ts';
 import { registerCheckoutRoutes } from './routes/checkout.ts';
+import { registerSupportRoutes } from './routes/support.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -45,6 +46,7 @@ export function createApp(db: Database): App {
   registerBasketRoutes(router, db);
   registerBuyerRoutes(router, db);
   registerCheckoutRoutes(router, db);
+  registerSupportRoutes(router, db);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {

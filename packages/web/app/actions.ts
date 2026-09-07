@@ -320,6 +320,66 @@ export async function editListing(data: FormData): Promise<void> {
   revalidatePath(`/listing/${listingId}`);
 }
 
+/* ------------------------------ support ------------------------------ */
+
+export async function raiseTicket(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const subject = text(data, 'subject');
+  const body = text(data, 'body');
+  if (subject === '' || body === '') return;
+
+  const result = await api<{ ticket: { id: string } }>('/v1/support/tickets', {
+    method: 'POST',
+    token,
+    body: {
+      subject,
+      body,
+      topic: text(data, 'topic') || 'other',
+      raisedAs: text(data, 'raisedAs') || 'buyer',
+      ...(text(data, 'orderId') === '' ? {} : { orderId: text(data, 'orderId') }),
+    },
+  });
+
+  revalidatePath('/support');
+  if (result.ok) redirect(`/support/${result.data.ticket.id}`);
+}
+
+export async function replyToTicket(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const ticketId = text(data, 'ticketId');
+  const body = text(data, 'body');
+  if (ticketId === '' || body === '') return;
+
+  await api(`/v1/support/tickets/${ticketId}/messages`, {
+    method: 'POST',
+    token,
+    // Only staff may write an internal note, and the API enforces that — this
+    // flag is simply absent for everybody else.
+    body: { body, ...(text(data, 'internal') === 'yes' ? { internal: true } : {}) },
+  });
+
+  revalidatePath(`/support/${ticketId}`);
+  revalidatePath('/support');
+  revalidatePath('/admin/support');
+}
+
+export async function setTicketState(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const ticketId = text(data, 'ticketId');
+  const state = text(data, 'state');
+  if (ticketId === '' || state === '') return;
+
+  await api(`/v1/admin/tickets/${ticketId}/state`, { method: 'POST', token, body: { state } });
+  revalidatePath('/admin/support');
+  revalidatePath(`/support/${ticketId}`);
+}
+
 export async function moderateListing(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');

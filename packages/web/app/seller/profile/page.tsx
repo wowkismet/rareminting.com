@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { uploadKycDocument } from '@/app/actions.ts';
 import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { Panel, StatCard } from '@/components/DashboardPanels.tsx';
 import { api } from '@/lib/api.ts';
@@ -8,6 +9,15 @@ import { sessionToken } from '@/lib/session.ts';
 
 export const metadata: Metadata = { title: 'Store profile' };
 export const dynamic = 'force-dynamic';
+
+interface SellerDocument {
+  id: string;
+  kind: string;
+  label: string;
+  state: string;
+  rejectionReason: string | null;
+  hasFile: boolean;
+}
 
 interface PayoutsView {
   bankAccount: {
@@ -36,8 +46,12 @@ const KYC_LABEL: Record<string, string> = {
 export default async function SellerProfilePage() {
   const { user, data } = await loadSeller();
   const token = await sessionToken();
-  const payouts = await api<PayoutsView>('/v1/sellers/me/payouts', { token });
+  const [payouts, docs] = await Promise.all([
+    api<PayoutsView>('/v1/sellers/me/payouts', { token }),
+    api<{ documents: SellerDocument[] }>('/v1/sellers/me/documents', { token }),
+  ]);
   const bank = payouts.ok ? payouts.data.bankAccount : null;
+  const documents = docs.ok ? docs.data.documents : [];
   const { seller, stats, reviews } = data;
 
   return (
@@ -141,6 +155,76 @@ export default async function SellerProfilePage() {
             </p>
           </Panel>
         </div>
+
+        <Panel title="Verification documents">
+          <p className="text-sm leading-relaxed text-slate-dim">
+            Three things let an admin approve you: your PAN card, a masked Aadhaar, and a cancelled
+            cheque for the account a payout goes to. Send a clear photograph or a PDF of each.
+          </p>
+
+          <ul className="mt-4 flex flex-col gap-3">
+            {(
+              [
+                ['pan', 'PAN card', 'The card itself, all four corners in frame.'],
+                [
+                  'aadhaar_masked',
+                  'Aadhaar — masked',
+                  'Cover the first eight digits. The last four are all we check, and a full copy is not something we will hold.',
+                ],
+                [
+                  'bank_proof',
+                  'Cancelled cheque',
+                  'Or a passbook page. The name on the account must match your PAN.',
+                ],
+              ] as const
+            ).map(([kind, label, hint]) => {
+              const sent = documents.find((d) => d.kind === kind);
+              return (
+                <li key={kind} className="rounded-sm border border-sand-line bg-sand-raised p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-sm text-slate">{label}</span>
+                    <span
+                      className={`font-mono text-[10px] uppercase tracking-wider ${
+                        sent?.hasFile === true ? 'text-accent-deep' : 'text-slate-dim'
+                      }`}
+                    >
+                      {sent?.hasFile === true ? `sent · ${sent.state}` : 'not sent'}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-dim">{hint}</p>
+                  {sent?.rejectionReason != null && (
+                    <p className="mt-2 text-xs text-ember">
+                      Sent back: {sent.rejectionReason}. Upload a new one and it goes back in the
+                      queue.
+                    </p>
+                  )}
+                  <form action={uploadKycDocument} className="mt-3 flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="kind" value={kind} />
+                    <input
+                      type="file"
+                      name="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      required
+                      className="text-xs text-slate file:mr-2 file:rounded-full file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:text-cream"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full border border-sand-line px-4 py-1.5 text-xs text-slate transition-colors hover:border-accent-deep hover:text-accent-deep"
+                    >
+                      {sent?.hasFile === true ? 'Replace' : 'Send'}
+                    </button>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+
+          <p className="mt-4 text-xs leading-relaxed text-slate-dim">
+            These are stored apart from everything else on the site, are never served on a public
+            address, and can only be opened by you or an admin — and every time an admin opens one,
+            that is written down against their name.
+          </p>
+        </Panel>
 
         <Panel title="Money" action={{ href: '/seller/payouts', label: 'Payouts' }}>
           <dl className="grid gap-4 sm:grid-cols-3">

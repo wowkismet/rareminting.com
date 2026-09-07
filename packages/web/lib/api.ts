@@ -27,15 +27,21 @@ export interface RequestOptions {
   readonly method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly token?: string | null;
+  /**
+   * A multipart body, for a file. Passed straight through — fetch sets the
+   * content-type and its boundary itself, and setting one by hand produces a
+   * header whose boundary does not match the body.
+   */
+  readonly formData?: FormData;
   /** Seconds to cache. Omit for anything user-specific. */
   readonly revalidate?: number;
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
-  const { method = 'GET', body, token, revalidate } = options;
+  const { method = 'GET', body, token, formData, revalidate } = options;
 
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers['content-type'] = 'application/json';
+  if (body !== undefined && formData === undefined) headers['content-type'] = 'application/json';
   if (token != null && token !== '') headers['authorization'] = `Bearer ${token}`;
 
   let response: Response;
@@ -43,7 +49,11 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     response = await fetch(`${BASE}${path}`, {
       method,
       headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(formData !== undefined
+        ? { body: formData }
+        : body === undefined
+          ? {}
+          : { body: JSON.stringify(body) }),
       ...(revalidate === undefined ? { cache: 'no-store' } : { next: { revalidate } }),
     });
   } catch {

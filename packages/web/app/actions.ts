@@ -320,6 +320,29 @@ export async function editListing(data: FormData): Promise<void> {
   revalidatePath(`/listing/${listingId}`);
 }
 
+/**
+ * Send a KYC document in.
+ *
+ * Multipart, forwarded as-is: the file never lands in this process. The API
+ * checks the magic number rather than trusting the extension, and stores it
+ * outside the directory nginx publishes.
+ */
+export async function uploadKycDocument(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const file = data.get('file');
+  const kind = text(data, 'kind');
+  if (!(file instanceof File) || file.size === 0 || kind === '') return;
+
+  const forward = new FormData();
+  forward.set('kind', kind);
+  forward.set('file', file, file.name);
+
+  await api('/v1/sellers/me/documents', { method: 'POST', token, formData: forward });
+  revalidatePath('/seller/profile');
+}
+
 /* ------------------------------ support ------------------------------ */
 
 export async function raiseTicket(data: FormData): Promise<void> {

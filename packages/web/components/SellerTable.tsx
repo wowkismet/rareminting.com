@@ -91,7 +91,16 @@ export function SellerTable({
               </td>
               <td className="border-b border-sand-line p-3 text-slate-dim">{s.kycState}</td>
               <td className="border-b border-sand-line p-3">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* The full file, before deciding. Approving somebody from a
+                      table row without opening what they sent is how a
+                      verification badge stops meaning anything. */}
+                  <a
+                    href={`/admin/kyc/${s.id}`}
+                    className="rounded-full border border-accent-deep/40 px-3 py-1 text-xs text-accent-deep transition-colors hover:bg-accent-deep hover:text-cream"
+                  >
+                    Review
+                  </a>
                   <form action={setKycState}>
                     <input type="hidden" name="sellerId" value={s.id} />
                     <input type="hidden" name="kycState" value="verified" />

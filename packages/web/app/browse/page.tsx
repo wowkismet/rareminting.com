@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
@@ -97,6 +98,8 @@ export default async function BrowsePage({
       <SiteHeader user={user} compact />
 
       <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-14">
+        <BannerSlot slot="browse" />
+
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
             The Floor

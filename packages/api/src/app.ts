@@ -24,6 +24,7 @@ import { registerBuyerRoutes } from './routes/buyer.ts';
 import { registerCheckoutRoutes } from './routes/checkout.ts';
 import { registerSupportRoutes } from './routes/support.ts';
 import { registerKycDocumentRoutes } from './routes/kyc-documents.ts';
+import { registerBannerRoutes } from './routes/banners.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -49,6 +50,7 @@ export function createApp(db: Database): App {
   registerCheckoutRoutes(router, db);
   registerSupportRoutes(router, db);
   registerKycDocumentRoutes(router, db);
+  registerBannerRoutes(router, db);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {

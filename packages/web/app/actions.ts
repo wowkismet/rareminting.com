@@ -320,6 +320,57 @@ export async function editListing(data: FormData): Promise<void> {
   revalidatePath(`/listing/${listingId}`);
 }
 
+/* ------------------------------ banners ------------------------------ */
+
+export async function createBanner(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+  if (text(data, 'headline') === '' || text(data, 'slot') === '') return;
+
+  // Forwarded as multipart so the image never lands in this process. Empty
+  // fields are dropped rather than sent as empty strings, which would store a
+  // banner with a blank link that looks clickable and goes nowhere.
+  const forward = new FormData();
+  for (const key of ['slot', 'headline', 'subtext', 'href', 'ctaLabel', 'altText', 'startsAt', 'endsAt']) {
+    const value = text(data, key);
+    if (value !== '') forward.set(key, value);
+  }
+  const file = data.get('file');
+  if (file instanceof File && file.size > 0) forward.set('file', file, file.name);
+
+  await api('/v1/admin/banners', { method: 'POST', token, formData: forward });
+  revalidatePath('/admin/promotions');
+  revalidatePath('/');
+}
+
+export async function setBannerActive(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const bannerId = text(data, 'bannerId');
+  if (bannerId === '') return;
+
+  await api(`/v1/admin/banners/${bannerId}`, {
+    method: 'PATCH',
+    token,
+    body: { isActive: text(data, 'isActive') === 'yes' },
+  });
+  revalidatePath('/admin/promotions');
+  revalidatePath('/');
+}
+
+export async function deleteBanner(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const bannerId = text(data, 'bannerId');
+  if (bannerId === '') return;
+
+  await api(`/v1/admin/banners/${bannerId}`, { method: 'DELETE', token });
+  revalidatePath('/admin/promotions');
+  revalidatePath('/');
+}
+
 /* ----------------------------- categories ----------------------------- */
 
 export async function createCategory(data: FormData): Promise<void> {

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { buyNow, removeFromCart, saveForLater } from '@/app/actions.ts';
+import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
 import { buyerMenu, type BasketResponse } from '@/lib/buyer-dashboard.ts';
@@ -59,6 +60,8 @@ export default async function CartPage() {
       action={{ href: '/browse', label: 'Keep browsing' }}
     >
       <div className="flex flex-col gap-8">
+        <BannerSlot slot="cart" />
+
         {items.length === 0 ? (
           <Empty action={{ href: '/browse', label: 'Find a date' }}>
             Your cart is empty. Search a date that means something to you, and add the notes that

@@ -1,6 +1,7 @@
 import { SUGGESTED_DATES, formatLongDate, parseIsoDate } from '@/lib/search.ts';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
+import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { FamousDates } from '@/components/FamousDates.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
@@ -429,6 +430,10 @@ export default async function Home({
 
       {/* ---------- Light zone ---------- */}
       <main className="mx-auto max-w-6xl px-5 py-16">
+        {/* Whatever staff have scheduled. Renders nothing when empty, so there
+            is no gap on a day with no promotion running. */}
+        <BannerSlot slot="home_hero" className="mb-16" />
+
         {/* Explore. The first thing under the fold, because somebody who did
             not arrive with a date in mind needs a way in that is not a
             search box. */}
@@ -574,6 +579,8 @@ export default async function Home({
               <div className="my-8">
                 <FamousDates />
               </div>
+
+              <BannerSlot slot="home_mid" className="mb-8" />
 
               {listings.length > 5 && (
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

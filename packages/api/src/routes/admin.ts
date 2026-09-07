@@ -14,6 +14,7 @@ import { json } from '../http.ts';
 import { badRequest, forbidden, notFound, unauthorized } from '../errors.ts';
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { one } from '../db.ts';
+import { csvName, csvResponse, toCsv } from '../csv.ts';
 
 const KYC_STATES = ['pending', 'under_review', 'verified', 'rejected', 'suspended'] as const;
 const LISTING_STATES = ['pending_review', 'minted', 'withdrawn', 'rejected'] as const;
@@ -828,6 +829,146 @@ export function registerAdminRoutes(router: Router): void {
         listingsOfKind: counts.get(r.kind) ?? 0,
       })),
     });
+  });
+
+  /**
+   * GET /v1/admin/reports/:report.csv — a report, downloadable.
+   *
+   * Money is reported in rupees with the paise as a separate column rather
+   * than as a decimal: a spreadsheet reading 1250.30 as a float and summing a
+   * thousand of them does not reliably give back the number it started with,
+   * and this is the file somebody reconciles a bank statement against.
+   */
+  router.add('GET', '/v1/admin/reports/:report', async (ctx) => {
+    await requireAdmin(ctx);
+    const report = (ctx.params['report'] ?? '').replace(/\.csv$/, '');
+
+    if (report === 'listings') {
+      const rows = await ctx.db.query<Record<string, string | null>>(
+        `select l.id::text, l.title, l.kind::text, l.state::text,
+                coalesce(n.serial_digits, '') as serial,
+                coalesce(l.grade, '') as grade,
+                (l.price_paise / 100)::text as price_inr,
+                (l.price_paise % 100)::text as price_paise,
+                s.display_name as seller,
+                l.view_count::text as views,
+                (select count(*) from media m where m.listing_id = l.id)::text as photos,
+                l.created_at::date::text as listed_on
+           from listings l
+           join sellers s on s.id = l.seller_id
+           left join notes n on n.listing_id = l.id
+          order by l.created_at desc`,
+      );
+      return csvResponse(
+        csvName('listings'),
+        toCsv(
+          ['Listing ID', 'Title', 'Kind', 'State', 'Serial', 'Grade', 'Price (₹)', 'Paise', 'Seller', 'Views', 'Photos', 'Listed on'],
+          rows.rows.map((r) => Object.values(r)),
+        ),
+      );
+    }
+
+    if (report === 'sellers') {
+      const rows = await ctx.db.query<Record<string, string | null>>(
+        `select s.id::text, s.display_name, s.kind::text, s.kyc_state::text,
+                u.email,
+                case when u.email_verified_at is null then 'no' else 'yes' end as email_verified,
+                coalesce(p.number_last4, '') as pan_last4,
+                (select count(*) from listings l where l.seller_id = s.id)::text as listings,
+                (select count(*) from orders o where o.seller_id = s.id
+                   and o.state not in ('cancelled','refunded'))::text as orders,
+                (select coalesce(sum(o.total_paise), 0) / 100 from orders o
+                  where o.seller_id = s.id and o.state not in ('cancelled','refunded'))::text as sales_inr,
+                s.created_at::date::text as joined
+           from sellers s
+           join users u on u.id = s.user_id
+           left join kyc_documents p on p.seller_id = s.id and p.kind = 'pan'
+          order by s.created_at desc`,
+      );
+      return csvResponse(
+        csvName('sellers'),
+        toCsv(
+          ['Seller ID', 'Trading as', 'Type', 'KYC', 'Email', 'Email verified', 'PAN last 4', 'Listings', 'Orders', 'Sales (₹)', 'Joined'],
+          rows.rows.map((r) => Object.values(r)),
+        ),
+      );
+    }
+
+    if (report === 'sales') {
+      const rows = await ctx.db.query<Record<string, string | null>>(
+        `select o.order_number, o.state::text, o.created_at::date::text as placed_on,
+                u.email as buyer, s.display_name as seller,
+                coalesce(l.title, '') as item,
+                (o.subtotal_paise / 100)::text   as subtotal_inr,
+                (o.commission_paise / 100)::text as commission_inr,
+                (o.gst_on_commission_paise / 100)::text as gst_inr,
+                (o.tds_paise / 100)::text        as tds_inr,
+                (o.total_paise / 100)::text      as total_inr,
+                (o.total_paise % 100)::text      as total_paise
+           from orders o
+           join users u   on u.id = o.buyer_id
+           join sellers s on s.id = o.seller_id
+           left join listings l on l.id = o.listing_id
+          order by o.created_at desc`,
+      );
+      return csvResponse(
+        csvName('sales'),
+        toCsv(
+          ['Order', 'State', 'Placed on', 'Buyer', 'Seller', 'Item', 'Subtotal (₹)', 'Commission (₹)', 'GST (₹)', 'TDS (₹)', 'Total (₹)', 'Paise'],
+          rows.rows.map((r) => Object.values(r)),
+        ),
+      );
+    }
+
+    if (report === 'payouts') {
+      const rows = await ctx.db.query<Record<string, string | null>>(
+        `select p.id::text, p.state::text, o.order_number,
+                s.display_name as seller, u.email as seller_email,
+                coalesce(b.account_masked, '') as bank_account,
+                coalesce(b.ifsc, '') as ifsc,
+                (p.amount_paise / 100)::text as amount_inr,
+                (p.amount_paise % 100)::text as amount_paise,
+                coalesce(p.gateway_payout_id, '') as transfer_reference,
+                coalesce(p.hold_reason, '') as hold_reason,
+                p.created_at::date::text as created_on,
+                coalesce(p.released_at::date::text, '') as released_on
+           from payouts p
+           join orders o  on o.id = p.order_id
+           join sellers s on s.id = p.seller_id
+           join users u   on u.id = s.user_id
+           left join bank_accounts b on b.id = p.bank_account_id
+          order by p.created_at desc`,
+      );
+      return csvResponse(
+        csvName('payouts'),
+        toCsv(
+          ['Payout ID', 'State', 'Order', 'Seller', 'Seller email', 'Bank account', 'IFSC', 'Amount (₹)', 'Paise', 'Transfer reference', 'Hold reason', 'Created', 'Released'],
+          rows.rows.map((r) => Object.values(r)),
+        ),
+      );
+    }
+
+    if (report === 'buyers') {
+      const rows = await ctx.db.query<Record<string, string | null>>(
+        `select u.id::text, coalesce(u.full_name, '') as name, u.email,
+                case when u.email_verified_at is null then 'no' else 'yes' end as email_verified,
+                (select count(*) from orders o where o.buyer_id = u.id)::text as orders,
+                (select coalesce(sum(o.total_paise), 0) / 100 from orders o
+                  where o.buyer_id = u.id and o.state not in ('cancelled','refunded'))::text as spent_inr,
+                u.created_at::date::text as joined
+           from users u
+          order by u.created_at desc`,
+      );
+      return csvResponse(
+        csvName('buyers'),
+        toCsv(
+          ['User ID', 'Name', 'Email', 'Email verified', 'Orders', 'Spent (₹)', 'Joined'],
+          rows.rows.map((r) => Object.values(r)),
+        ),
+      );
+    }
+
+    throw notFound('No such report.');
   });
 
   /** GET /v1/admin/audit — the trail, newest first. */

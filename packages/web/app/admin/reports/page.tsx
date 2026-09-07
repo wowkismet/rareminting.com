@@ -139,6 +139,45 @@ export default async function AdminReportsPage() {
           </Panel>
         </div>
 
+        <Panel title="Download">
+          <p className="text-sm text-slate-dim">
+            Every figure on this page, and a good deal more besides, as a spreadsheet. Money is
+            given in whole rupees with the paise in their own column — a spreadsheet summing a
+            thousand decimals does not reliably give back the number it started with, and these are
+            the files a bank statement gets reconciled against.
+          </p>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {(
+              [
+                ['listings', 'Every listing', 'Title, serial, price, seller, views, photographs'],
+                ['sellers', 'Every seller', 'KYC state, contact, listings, orders, sales'],
+                ['sales', 'Every order', 'Buyer, seller, commission, GST, TDS, total'],
+                ['payouts', 'Every payout', 'Seller, bank account, amount, transfer reference'],
+                ['buyers', 'Every account', 'Orders placed and total spent'],
+              ] as const
+            ).map(([key, title, detail]) => (
+              <li key={key}>
+                <a
+                  href={`/api/v1/admin/reports/${key}.csv`}
+                  download
+                  className="flex h-full flex-col gap-1 rounded-sm border border-sand-line bg-sand-raised p-4 transition-colors hover:border-accent-deep"
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-slate">{title}</span>
+                    <span
+                      aria-hidden
+                      className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent-deep"
+                    >
+                      CSV ↓
+                    </span>
+                  </span>
+                  <span className="text-xs leading-snug text-slate-dim">{detail}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
         <p className="rounded-sm border border-sand-line bg-sand-raised p-5 text-sm leading-relaxed text-slate-dim">
           Absent on purpose: conversion rate, repeat-buyer rate and traffic. None of the three can
           be derived from what is recorded — there is a view counter on each listing but no record

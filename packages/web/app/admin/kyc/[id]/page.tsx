@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { setKycState } from '@/app/actions.ts';
+import { editSeller, setKycState } from '@/app/actions.ts';
 import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { Panel } from '@/components/DashboardPanels.tsx';
 import { api } from '@/lib/api.ts';
@@ -177,6 +177,57 @@ export default async function KycReviewPage({ params }: { params: Promise<{ id: 
           <p className="mt-4 text-xs leading-relaxed text-slate-dim">
             Opening a document is recorded against your account in the audit log, with the time and
             which document. That is deliberate: these are somebody&rsquo;s identity papers.
+          </p>
+        </Panel>
+
+        <Panel title="Correct their details">
+          <form action={editSeller} className="grid gap-3 sm:grid-cols-3">
+            <input type="hidden" name="sellerId" value={seller.id} />
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
+                Trading as
+              </span>
+              <input
+                name="displayName"
+                defaultValue={seller.displayName}
+                className="rounded-sm border border-sand-line bg-sand px-3 py-2 text-sm text-slate"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
+                Legal name
+              </span>
+              <input
+                name="legalName"
+                placeholder="Leave blank to keep"
+                className="rounded-sm border border-sand-line bg-sand px-3 py-2 text-sm text-slate"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
+                GSTIN
+              </span>
+              <input
+                name="gstin"
+                defaultValue={seller.gstin ?? ''}
+                placeholder="Leave blank to keep"
+                className="rounded-sm border border-sand-line bg-sand px-3 py-2 font-mono text-sm uppercase text-slate"
+              />
+            </label>
+            <div className="sm:col-span-3">
+              <button
+                type="submit"
+                className="rounded-full border border-sand-line px-5 py-2 text-sm text-slate transition-colors hover:border-accent-deep hover:text-accent-deep"
+              >
+                Save details
+              </button>
+            </div>
+          </form>
+          <p className="mt-4 text-xs leading-relaxed text-slate-dim">
+            The PAN and Aadhaar numbers are not editable, here or anywhere. Neither is stored — each
+            became a one-way fingerprint at registration — so there is nothing to correct. A seller
+            who entered one wrongly registers it again. The trading name appears on every order a
+            buyer has already placed with them, so changing it is recorded against your account.
           </p>
         </Panel>
 

@@ -20,6 +20,7 @@ interface AdminListing {
   state: string;
   priceInr: number | null;
   grade: string | null;
+  sellerId: string;
   sellerName: string;
   serialDigits: string | null;
   createdAt: string;
@@ -32,10 +33,28 @@ interface AdminListing {
  * this page: putting something back on the market is the seller's decision to
  * make, not staff's.
  */
-export default async function AdminProductsPage() {
+export default async function AdminProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sellerId?: string }>;
+}) {
+  const { sellerId } = await searchParams;
   const { user, token, sections } = await loadAdmin();
-  const result = await api<{ listings: AdminListing[] }>('/v1/admin/listings', { token });
+
+  const bySeller = typeof sellerId === 'string' && /^[0-9a-f-]{36}$/i.test(sellerId);
+  const [result, sellersResult] = await Promise.all([
+    api<{ listings: AdminListing[] }>(
+      bySeller ? `/v1/admin/listings?sellerId=${sellerId}` : '/v1/admin/listings',
+      { token },
+    ),
+    api<{ sellers: { id: string; displayName: string; listingCount: number }[] }>(
+      '/v1/admin/sellers',
+      { token },
+    ),
+  ]);
   const listings = result.ok ? result.data.listings : [];
+  const sellers = sellersResult.ok ? sellersResult.data.sellers : [];
+  const viewing = bySeller ? sellers.find((s) => s.id === sellerId) : undefined;
 
   const live = listings.filter((l) => l.state === 'minted').length;
   const drafts = listings.filter((l) => l.state === 'draft').length;
@@ -46,11 +65,48 @@ export default async function AdminProductsPage() {
       user={user}
       eyebrow="Staff only"
       title="Products & listings"
-      subtitle={`${listings.length} listing${listings.length === 1 ? '' : 's'} on the floor`}
+      subtitle={
+        viewing === undefined
+          ? `${listings.length} listing${listings.length === 1 ? '' : 's'} on the floor`
+          : `${listings.length} from ${viewing.displayName}`
+      }
       sections={sections}
       current="/admin/products"
     >
       <div className="flex flex-col gap-6">
+        <form method="get" className="flex flex-wrap items-center gap-3">
+          <label htmlFor="sellerId" className="text-sm text-slate-dim">
+            Seller
+          </label>
+          <select
+            id="sellerId"
+            name="sellerId"
+            defaultValue={bySeller ? sellerId : ''}
+            className="min-w-56 rounded-sm border border-sand-line bg-sand-raised px-3 py-2 text-sm text-slate"
+          >
+            <option value="">Everyone</option>
+            {sellers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.displayName} ({s.listingCount})
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="rounded-full bg-primary px-5 py-2 text-xs text-cream transition-colors hover:bg-secondary"
+          >
+            Show
+          </button>
+          {bySeller && (
+            <a
+              href="/admin/products"
+              className="rounded-full border border-sand-line px-5 py-2 text-xs text-slate-dim"
+            >
+              Clear
+            </a>
+          )}
+        </form>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total" value={String(listings.length)} />
           <StatCard label="Live" value={String(live)} accent />
@@ -86,7 +142,14 @@ export default async function AdminProductsPage() {
                         </a>
                       </td>
                       <td className="border-b border-sand-line p-3 text-slate-dim">
-                        {l.sellerName}
+                        {/* Straight to everything else this seller has listed —
+                            the usual next question after finding one problem. */}
+                        <a
+                          href={`/admin/products?sellerId=${l.sellerId}`}
+                          className="underline-offset-4 hover:text-accent-deep hover:underline"
+                        >
+                          {l.sellerName}
+                        </a>
                       </td>
                       <td className="border-b border-sand-line p-3 tabular-nums text-slate-dim">
                         {l.priceInr === null ? '—' : rupees(l.priceInr)}

@@ -406,10 +406,93 @@ export function registerAdminRoutes(router: Router): void {
     return json({ id, kycState: state, mintingVerified: verified });
   });
 
-  /** GET /v1/admin/listings — moderation list. */
+  /**
+   * PATCH /v1/admin/sellers/:id — correct a seller's details.
+   *
+   * What can be changed is narrower than it looks, and deliberately so. A PAN
+   * or an Aadhaar number cannot be edited here or anywhere else, because
+   * neither is stored: registration turned each into a one-way fingerprint and
+   * its last four characters. A seller who typed theirs wrong re-registers it.
+   * That is a worse afternoon for one person than an editable field would be,
+   * and a far better one for everybody if this database is ever stolen.
+   */
+  router.add('PATCH', '/v1/admin/sellers/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+    const fields = asObject(await ctx.body());
+
+    const before = one(
+      await ctx.db.query<{
+        display_name: string;
+        legal_name: string | null;
+        gstin: string | null;
+        listing_limit: number;
+      }>(
+        `select display_name, legal_name, gstin, listing_limit from sellers where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such seller.');
+
+    const patch: Record<string, unknown> = {};
+
+    if ('displayName' in fields) {
+      const name = requiredString(fields, 'displayName', 120);
+      if (name.trim().length < 2) {
+        throw badRequest('A trading name needs at least a couple of characters.', {
+          displayName: 'too_short',
+        });
+      }
+      patch['display_name'] = name.trim();
+    }
+
+    if ('legalName' in fields) patch['legal_name'] = optionalString(fields, 'legalName', 200);
+
+    if ('gstin' in fields) {
+      const gstin = optionalString(fields, 'gstin', 15);
+      if (gstin !== null && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]{3}$/.test(gstin)) {
+        throw badRequest('That GSTIN does not look right.', { gstin: 'invalid' });
+      }
+      patch['gstin'] = gstin;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw badRequest('Nothing to change.', { body: 'empty' });
+    }
+
+    const sets = Object.keys(patch).map((k, i) => `${k} = $${i + 2}`);
+    const updated = await ctx.db.query<{
+      id: string;
+      display_name: string;
+      legal_name: string | null;
+      gstin: string | null;
+    }>(
+      `update sellers set ${sets.join(', ')}
+        where id = $1
+        returning id, display_name, legal_name, gstin`,
+      [id, ...Object.values(patch)],
+    );
+
+    // The trading name appears on every order a buyer has placed with them, so
+    // changing it is not a cosmetic edit and is recorded as such.
+    await audit(ctx, actorId, 'seller.edit', 'seller', id, before, patch);
+
+    const row = updated.rows[0]!;
+    return json({
+      seller: {
+        id: row.id,
+        displayName: row.display_name,
+        legalName: row.legal_name,
+        gstin: row.gstin,
+      },
+    });
+  });
+
+  /** GET /v1/admin/listings — moderation list, filterable by seller. */
   router.add('GET', '/v1/admin/listings', async (ctx) => {
     await requireAdmin(ctx);
     const state = ctx.url.searchParams.get('state');
+    const sellerId = ctx.url.searchParams.get('sellerId');
 
     const rows = await ctx.db.query<{
       id: string;
@@ -417,20 +500,22 @@ export function registerAdminRoutes(router: Router): void {
       state: string;
       price_paise: string | null;
       grade: string | null;
+      seller_id: string;
       seller_name: string;
       serial_digits: string | null;
       created_at: string;
     }>(
       `select l.id, l.title, l.state, l.price_paise::text as price_paise, l.grade,
-              s.display_name as seller_name, n.serial_digits,
+              l.seller_id, s.display_name as seller_name, n.serial_digits,
               l.created_at::text as created_at
          from listings l
          join sellers s on s.id = l.seller_id
          left join notes n on n.listing_id = l.id
         where ($1::text is null or l.state = $1::listing_state)
+          and ($2::uuid is null or l.seller_id = $2::uuid)
         order by l.created_at desc
-        limit 100`,
-      [state],
+        limit 500`,
+      [state, sellerId],
     );
 
     return json({
@@ -440,6 +525,7 @@ export function registerAdminRoutes(router: Router): void {
         state: r.state,
         priceInr: r.price_paise === null ? null : Number(r.price_paise) / 100,
         grade: r.grade,
+        sellerId: r.seller_id,
         sellerName: r.seller_name,
         serialDigits: r.serial_digits,
         createdAt: r.created_at,

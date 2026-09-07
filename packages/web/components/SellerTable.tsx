@@ -6,6 +6,7 @@ export interface AdminSeller {
   kind: string;
   kycState: string;
   mintingVerified: boolean;
+  gstin: string | null;
   email: string;
   emailVerified: boolean;
   mobile: string | null;

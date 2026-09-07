@@ -321,6 +321,35 @@ export async function editListing(data: FormData): Promise<void> {
 }
 
 /**
+ * Correct a seller's details as an admin.
+ *
+ * Narrower than it sounds on purpose. A PAN or Aadhaar number cannot be edited
+ * here or anywhere else, because neither is stored — registration turned each
+ * into a one-way fingerprint. A seller who typed theirs wrong re-registers it.
+ */
+export async function editSeller(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const sellerId = text(data, 'sellerId');
+  if (sellerId === '') return;
+
+  const patch: Record<string, unknown> = {};
+  const displayName = text(data, 'displayName');
+  const legalName = text(data, 'legalName');
+  const gstin = text(data, 'gstin');
+
+  if (displayName !== '') patch['displayName'] = displayName;
+  if (legalName !== '') patch['legalName'] = legalName;
+  if (gstin !== '') patch['gstin'] = gstin.toUpperCase();
+  if (Object.keys(patch).length === 0) return;
+
+  await api(`/v1/admin/sellers/${sellerId}`, { method: 'PATCH', token, body: patch });
+  revalidatePath(`/admin/kyc/${sellerId}`);
+  revalidatePath('/admin/sellers');
+}
+
+/**
  * Send a KYC document in.
  *
  * Multipart, forwarded as-is: the file never lands in this process. The API

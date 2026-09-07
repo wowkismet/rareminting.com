@@ -40,6 +40,14 @@ if ! id -u "$APP_USER" >/dev/null 2>&1; then
   adduser --system --group --home "$APP_DIR" "$APP_USER"
 fi
 mkdir -p "$APP_DIR/releases" "$APP_DIR/uploads"
+
+# Identity documents. Deliberately NOT under uploads/: nginx publishes that
+# directory at /media/ with no authentication, which is right for a photograph
+# of a note somebody is trying to sell and catastrophic for a PAN card. These
+# leave the server only through an authenticated route that checks who is
+# asking, and 0700 keeps them from anything running as another user.
+mkdir -p "$APP_DIR/kyc"
+chmod 700 "$APP_DIR/kyc"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 # Nginx serves uploaded photographs straight off the disk, so www-data has to
@@ -227,6 +235,7 @@ Type=simple
 User=${APP_USER}
 WorkingDirectory=${APP_DIR}/current/api
 Environment=UPLOAD_DIR=${APP_DIR}/uploads
+Environment=KYC_DIR=${APP_DIR}/kyc
 EnvironmentFile=/etc/rareminting.env
 ExecStart=/usr/bin/node src/server.ts
 Restart=always

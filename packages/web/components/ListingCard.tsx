@@ -36,7 +36,7 @@ export function ListingCard({
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-sm border border-sand-line bg-sand-raised transition-colors hover:border-accent-deep/60">
-      <a href={`/listing/${listing.id}`} className="flex flex-1 flex-col gap-3 p-5">
+      <a href={`/listing/${listing.id}`} className="flex flex-1 flex-col gap-2 p-4">
         {listing.imageUrl != null ? (
           <img
             src={listing.imageUrl}
@@ -62,7 +62,10 @@ export function ListingCard({
         </div>
 
         {note !== undefined ? (
-          <p className="font-mono text-lg tracking-[0.12em] tabular-nums text-slate">
+          // The serial keeps its letter-spacing even at this size: it is a
+          // number people read digit by digit, looking for their own date in
+          // it, and tightening it up is what makes six digits misread as five.
+          <p className="font-mono text-sm tracking-[0.1em] tabular-nums text-slate">
             {note.prefix !== null && (
               <span className="text-slate-dim">
                 {note.prefix}
@@ -72,7 +75,7 @@ export function ListingCard({
             {note.serialDigits}
           </p>
         ) : (
-          <p className="font-display text-lg text-slate">{listing.title}</p>
+          <p className="font-display text-sm text-slate">{listing.title}</p>
         )}
 
         {listing.match !== undefined && (
@@ -84,18 +87,18 @@ export function ListingCard({
           </p>
         )}
 
-        <p className="mt-auto flex items-baseline justify-between gap-3">
-          <span className="font-display text-xl text-slate">
+        <p className="mt-auto flex items-baseline justify-between gap-2">
+          <span className="font-display text-base text-slate">
             {listing.priceInr === null ? '—' : `₹${listing.priceInr.toLocaleString('en-IN')}`}
           </span>
-          <span className="text-xs text-slate-dim">
+          <span className="text-[10px] text-slate-dim">
             {note !== undefined && `₹${note.denomination} · `}
             {listing.grade ?? 'ungraded'}
           </span>
         </p>
       </a>
 
-      <div className="border-t border-sand-line px-5 py-3">
+      <div className="border-t border-sand-line px-4 py-2.5">
         {!buyable ? (
           <p className="text-center font-mono text-[10px] uppercase tracking-[0.18em] text-slate-dim">
             {listing.state === 'struck' ? 'Sold' : 'Not available'}
@@ -106,7 +109,7 @@ export function ListingCard({
           // from a grid.
           <a
             href={`/listing/${listing.id}`}
-            className="block rounded-full bg-primary px-4 py-2 text-center text-sm font-medium text-cream transition-colors hover:bg-secondary"
+            className="block whitespace-nowrap rounded-full bg-primary px-2.5 py-1.5 text-center text-xs font-medium text-cream transition-colors hover:bg-secondary"
           >
             Place a bid
           </a>
@@ -117,7 +120,7 @@ export function ListingCard({
               <input type="hidden" name="from" value={fromPath} />
               <button
                 type="submit"
-                className="w-full rounded-full border border-sand-line px-3 py-2 text-sm text-slate transition-colors hover:border-accent-deep hover:text-accent-deep"
+                className="w-full whitespace-nowrap rounded-full bg-accent px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-accent-bright"
               >
                 Add to cart
               </button>
@@ -126,7 +129,7 @@ export function ListingCard({
               <input type="hidden" name="listingId" value={listing.id} />
               <button
                 type="submit"
-                className="w-full rounded-full bg-primary px-3 py-2 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+                className="w-full whitespace-nowrap rounded-full bg-primary px-2.5 py-1.5 text-xs font-medium text-cream transition-colors hover:bg-secondary"
               >
                 Buy now
               </button>

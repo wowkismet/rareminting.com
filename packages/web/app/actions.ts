@@ -320,6 +320,60 @@ export async function editListing(data: FormData): Promise<void> {
   revalidatePath(`/listing/${listingId}`);
 }
 
+/* ----------------------------- categories ----------------------------- */
+
+export async function createCategory(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const name = text(data, 'name');
+  const kind = text(data, 'kind');
+  if (name === '' || kind === '') return;
+
+  await api('/v1/admin/categories', {
+    method: 'POST',
+    token,
+    body: {
+      name,
+      kind,
+      ...(text(data, 'description') === '' ? {} : { description: text(data, 'description') }),
+      ...(text(data, 'parentId') === '' ? {} : { parentId: text(data, 'parentId') }),
+    },
+  });
+  revalidatePath('/admin/categories');
+}
+
+export async function editCategory(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const id = text(data, 'categoryId');
+  if (id === '') return;
+
+  const patch: Record<string, unknown> = {};
+  if (text(data, 'name') !== '') patch['name'] = text(data, 'name');
+  if (text(data, 'description') !== '') patch['description'] = text(data, 'description');
+  if (text(data, 'sortOrder') !== '') {
+    const n = Number(text(data, 'sortOrder'));
+    if (Number.isInteger(n)) patch['sortOrder'] = n;
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  await api(`/v1/admin/categories/${id}`, { method: 'PATCH', token, body: patch });
+  revalidatePath('/admin/categories');
+}
+
+export async function deleteCategory(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const id = text(data, 'categoryId');
+  if (id === '') return;
+
+  await api(`/v1/admin/categories/${id}`, { method: 'DELETE', token });
+  revalidatePath('/admin/categories');
+}
+
 /**
  * Correct a seller's details as an admin.
  *

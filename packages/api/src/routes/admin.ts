@@ -11,7 +11,7 @@ import { maskMobile } from '@rareminting/config';
 
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
-import { badRequest, forbidden, notFound, unauthorized } from '../errors.ts';
+import { badRequest, conflict, forbidden, notFound, unauthorized } from '../errors.ts';
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { one } from '../db.ts';
 import { csvName, csvResponse, toCsv } from '../csv.ts';
@@ -19,6 +19,20 @@ import { csvName, csvResponse, toCsv } from '../csv.ts';
 const KYC_STATES = ['pending', 'under_review', 'verified', 'rejected', 'suspended'] as const;
 const LISTING_STATES = ['pending_review', 'minted', 'withdrawn', 'rejected'] as const;
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
+
+/** Matches the item_kind enum. */
+const ITEM_KINDS = [
+  'banknote',
+  'coin',
+  'stamp',
+  'bond',
+  'share_certificate',
+  'ephemera',
+  'jewellery',
+  'precious_stone',
+  'antique',
+  'other',
+] as const;
 
 /** The signed-in user's roles, or an empty list. */
 async function rolesOf(ctx: Ctx, userId: string): Promise<string[]> {
@@ -1055,6 +1069,146 @@ export function registerAdminRoutes(router: Router): void {
     }
 
     throw notFound('No such report.');
+  });
+
+  /**
+   * POST /v1/admin/categories — add one.
+   *
+   * The slug is what appears in a URL and is what a link somebody has shared
+   * or bookmarked points at, so it is generated from the name once and then
+   * left alone. Changing it later silently breaks every link to it.
+   */
+  router.add('POST', '/v1/admin/categories', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const fields = asObject(await ctx.body());
+
+    const name = requiredString(fields, 'name', 120);
+    if (name.trim().length < 2) {
+      throw badRequest('Give the category a name.', { name: 'too_short' });
+    }
+    const kind = oneOf(fields, 'kind', ITEM_KINDS);
+    const description = optionalString(fields, 'description', 500);
+    const parentId = optionalString(fields, 'parentId', 36);
+
+    const slug = name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
+    if (slug === '') {
+      throw badRequest('That name has no letters or numbers in it to make an address from.', {
+        name: 'unusable',
+      });
+    }
+
+    const clash = one(
+      await ctx.db.query<{ id: string }>(`select id from categories where slug = $1`, [slug]),
+    );
+    if (clash !== null) throw conflict(`A category already lives at /${slug}.`);
+
+    if (parentId !== null) {
+      const parent = one(
+        await ctx.db.query<{ id: string }>(`select id from categories where id = $1`, [parentId]),
+      );
+      if (parent === null) throw badRequest('No such parent category.', { parentId: 'unknown' });
+    }
+
+    const created = await ctx.db.query<{ id: string; slug: string }>(
+      `insert into categories (slug, name, kind, parent_id, description, sort_order)
+       values ($1, $2, $3::item_kind, $4, $5,
+               coalesce((select max(sort_order) + 1 from categories), 0))
+       returning id, slug`,
+      [slug, name.trim(), kind, parentId, description],
+    );
+
+    await audit(ctx, actorId, 'category.create', 'category', created.rows[0]!.id, null, {
+      slug,
+      name: name.trim(),
+      kind,
+    });
+
+    return json({ category: { id: created.rows[0]!.id, slug: created.rows[0]!.slug } }, 201);
+  });
+
+  /**
+   * PATCH /v1/admin/categories/:id — rename or reorder one.
+   *
+   * The slug is deliberately not changeable. It is the address, and a
+   * category that quietly moves takes every shared link with it.
+   */
+  router.add('PATCH', '/v1/admin/categories/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+    const fields = asObject(await ctx.body());
+
+    const before = one(
+      await ctx.db.query<{ name: string; description: string | null; sort_order: number }>(
+        `select name, description, sort_order from categories where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such category.');
+
+    const patch: Record<string, unknown> = {};
+    if ('name' in fields) {
+      const name = requiredString(fields, 'name', 120);
+      if (name.trim().length < 2) throw badRequest('Give it a name.', { name: 'too_short' });
+      patch['name'] = name.trim();
+    }
+    if ('description' in fields) {
+      patch['description'] = optionalString(fields, 'description', 500);
+    }
+    if ('sortOrder' in fields) {
+      const n = Number(fields['sortOrder']);
+      if (!Number.isInteger(n) || n < 0 || n > 9999) {
+        throw badRequest('Sort order must be a whole number.', { sortOrder: 'invalid' });
+      }
+      patch['sort_order'] = n;
+    }
+    if (Object.keys(patch).length === 0) throw badRequest('Nothing to change.', { body: 'empty' });
+
+    const sets = Object.keys(patch).map((k, i) => `${k} = $${i + 2}`);
+    await ctx.db.query(`update categories set ${sets.join(', ')} where id = $1`, [
+      id,
+      ...Object.values(patch),
+    ]);
+
+    await audit(ctx, actorId, 'category.edit', 'category', id, before, patch);
+    return json({ id, ...patch });
+  });
+
+  /**
+   * DELETE /v1/admin/categories/:id — remove one.
+   *
+   * Refused while anything hangs off it. A category with children whose parent
+   * vanishes leaves them orphaned at the top level, which looks like a bug to
+   * everybody who did not do it.
+   */
+  router.add('DELETE', '/v1/admin/categories/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+
+    const before = one(
+      await ctx.db.query<{ slug: string; name: string }>(
+        `select slug, name from categories where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such category.');
+
+    const children = await ctx.db.query<{ n: string }>(
+      `select count(*)::text as n from categories where parent_id = $1`,
+      [id],
+    );
+    if (Number(children.rows[0]?.n ?? 0) > 0) {
+      throw conflict('Move or remove the categories inside this one first.');
+    }
+
+    await ctx.db.query(`delete from categories where id = $1`, [id]);
+    await audit(ctx, actorId, 'category.delete', 'category', id, before, null);
+
+    return json({ removed: id });
   });
 
   /** GET /v1/admin/audit — the trail, newest first. */

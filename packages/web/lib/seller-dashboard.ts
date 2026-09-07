@@ -24,6 +24,9 @@ export interface SellerListing {
   grade: string | null;
   views: number;
   photoCount: number;
+  /** Buyers watching it. Neither reserves the listing. */
+  savedCount: number;
+  cartCount: number;
   imageUrl: string | null;
   serialDigits: string | null;
   denomination: number | null;

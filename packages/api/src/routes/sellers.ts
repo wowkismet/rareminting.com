@@ -509,14 +509,24 @@ export function registerSellerRoutes(router: Router, database: Database): void {
       grade: string | null;
       view_count: number;
       photo_count: string;
+      saved_count: string;
+      cart_count: string;
       thumb: string | null;
       serial_digits: string | null;
       denomination: number | null;
       created_at: string;
     }>(
+      // How many buyers are watching, and how many have it in a basket right
+      // now. Neither takes the note off the market — nothing is reserved until
+      // checkout — so a seller seeing three people in the cart is seeing
+      // interest, not a queue. Worth showing precisely because it is the
+      // signal a seller would otherwise have to guess at before dropping a
+      // price.
       `select l.id, l.title, l.state, l.kind, l.sale_mode, l.price_paise::text as price_paise, l.grade,
               l.view_count,
               (select count(*) from media m where m.listing_id = l.id)::text as photo_count,
+              (select count(*) from saved_items s where s.listing_id = l.id)::text as saved_count,
+              (select count(*) from cart_items c where c.listing_id = l.id)::text  as cart_count,
               (select m.storage_key from media m
                 where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb,
               n.serial_digits, n.denomination,
@@ -740,6 +750,9 @@ export function registerSellerRoutes(router: Router, database: Database): void {
         grade: r.grade,
         views: r.view_count,
         photoCount: Number(r.photo_count),
+        /** Buyers watching it. Nothing is reserved by either. */
+        savedCount: Number(r.saved_count),
+        cartCount: Number(r.cart_count),
         imageUrl: r.thumb === null ? null : `/media/${r.thumb}`,
         serialDigits: r.serial_digits,
         denomination: r.denomination,

@@ -484,7 +484,7 @@ export default async function Home({
                   <span className="text-accent-deep">Exact matches.</span> The serial reads as your
                   date, digit for digit.
                 </p>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   {results.exact.map((listing) => (
                     <ListingCard key={listing.id} listing={listing} badge="Exact" />
                   ))}
@@ -514,7 +514,7 @@ export default async function Home({
                   <span className="text-slate">Same day and month,</span> a different year. The near
                   misses collectors often prefer.
                 </p>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   {results.dayMonth.slice(0, 6).map((listing) => (
                     <ListingCard key={listing.id} listing={listing} badge="Near" />
                   ))}
@@ -560,8 +560,8 @@ export default async function Home({
                   somebody scrolling the floor meets it. Split into two grids
                   rather than spanning a column, which keeps it full width
                   whatever the breakpoint. */}
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                {listings.slice(0, 6).map((listing) => (
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                {listings.slice(0, 5).map((listing) => (
                   <ListingCard
                     key={listing.id}
                     listing={listing}
@@ -575,9 +575,9 @@ export default async function Home({
                 <FamousDates />
               </div>
 
-              {listings.length > 6 && (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                  {listings.slice(6).map((listing) => (
+              {listings.length > 5 && (
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                  {listings.slice(5).map((listing) => (
                     <ListingCard
                       key={listing.id}
                       listing={listing}

@@ -52,6 +52,26 @@ export function ItemRow({
             {' · '}
             {listing.photoCount} photo{listing.photoCount === 1 ? '' : 's'}
           </p>
+
+          {/* Who is watching. Neither a wishlist nor a cart takes the note off
+              the market, so this is interest rather than a queue — which is
+              exactly the thing a seller would otherwise guess at before
+              dropping a price. */}
+          {(listing.savedCount > 0 || listing.cartCount > 0) && (
+            <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-accent-deep">
+              {listing.savedCount > 0 && (
+                <span>
+                  ♥ Saved by {listing.savedCount} buyer{listing.savedCount === 1 ? '' : 's'}
+                </span>
+              )}
+              {listing.cartCount > 0 && (
+                <span>
+                  In {listing.cartCount} cart{listing.cartCount === 1 ? '' : 's'} — still on sale
+                  until one of them pays
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-3">

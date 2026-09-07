@@ -286,6 +286,40 @@ export async function setKycState(data: FormData): Promise<void> {
   revalidatePath('/admin');
 }
 
+/**
+ * Correct a listing's details as an admin.
+ *
+ * Only the fields actually filled in are sent. An empty box means "leave this
+ * alone" rather than "blank it" — otherwise an admin fixing a price would wipe
+ * the description the seller wrote.
+ */
+export async function editListing(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  const patch: Record<string, unknown> = {};
+  const title = text(data, 'title');
+  const grade = text(data, 'grade');
+  const price = text(data, 'priceInr');
+  const description = text(data, 'description');
+
+  if (title !== '') patch['title'] = title;
+  if (grade !== '') patch['grade'] = grade;
+  if (description !== '') patch['description'] = description;
+  if (price !== '') {
+    const n = Number(price);
+    if (Number.isFinite(n) && n > 0) patch['priceInr'] = Math.round(n);
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  await api(`/v1/admin/listings/${listingId}`, { method: 'PATCH', token, body: patch });
+  revalidatePath('/admin/products');
+  revalidatePath(`/listing/${listingId}`);
+}
+
 export async function moderateListing(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');

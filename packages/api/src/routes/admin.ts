@@ -12,11 +12,12 @@ import { maskMobile } from '@rareminting/config';
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
 import { badRequest, forbidden, notFound, unauthorized } from '../errors.ts';
-import { asObject, oneOf, optionalString } from '../validate.ts';
+import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { one } from '../db.ts';
 
 const KYC_STATES = ['pending', 'under_review', 'verified', 'rejected', 'suspended'] as const;
 const LISTING_STATES = ['pending_review', 'minted', 'withdrawn', 'rejected'] as const;
+const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 
 /** The signed-in user's roles, or an empty list. */
 async function rolesOf(ctx: Ctx, userId: string): Promise<string[]> {
@@ -443,6 +444,141 @@ export function registerAdminRoutes(router: Router): void {
         createdAt: r.created_at,
       })),
     });
+  });
+
+  /**
+   * PATCH /v1/admin/listings/:id — correct a listing's details.
+   *
+   * Staff editing somebody else's item is exactly the activity that has to be
+   * reconstructable afterwards, so the before and after of every field touched
+   * goes into the audit trail, which a trigger refuses to let anyone edit.
+   *
+   * Only the fields sent are changed. Omitting one leaves it alone, which is
+   * what stops a form that loaded stale data from blanking everything a seller
+   * wrote while an admin was fixing the price.
+   */
+  router.add('PATCH', '/v1/admin/listings/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+    const fields = asObject(await ctx.body());
+
+    const before = one(
+      await ctx.db.query<{
+        title: string;
+        description: string | null;
+        price_paise: string | null;
+        grade: string | null;
+        seller_id: string;
+      }>(
+        `select title, description, price_paise::text as price_paise, grade, seller_id
+           from listings where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such listing.');
+
+    const patch: Record<string, unknown> = {};
+
+    if ('title' in fields) {
+      const title = requiredString(fields, 'title', 200);
+      if (title.trim().length < 2) {
+        throw badRequest('A title needs at least a couple of characters.', { title: 'too_short' });
+      }
+      patch['title'] = title.trim();
+    }
+
+    if ('description' in fields) {
+      patch['description'] = optionalString(fields, 'description', 4000);
+    }
+
+    if ('grade' in fields) {
+      const grade = optionalString(fields, 'grade', 8);
+      if (grade !== null && !(GRADES as readonly string[]).includes(grade)) {
+        throw badRequest(`Grade must be one of ${GRADES.join(', ')}.`, { grade: 'unknown' });
+      }
+      patch['grade'] = grade;
+    }
+
+    if ('priceInr' in fields) {
+      const raw = fields['priceInr'];
+      if (raw === null) {
+        patch['price_paise'] = null;
+      } else {
+        const inr = Number(raw);
+        if (!Number.isFinite(inr) || inr <= 0 || !Number.isInteger(inr)) {
+          throw badRequest('Price must be a whole number of rupees, above zero.', {
+            priceInr: 'invalid',
+          });
+        }
+        // A price is stored in paise and never in floating point. Anything
+        // beyond this is a typo rather than a banknote.
+        if (inr > 100_000_000) {
+          throw badRequest('That price looks like a mistake. Check it and try again.', {
+            priceInr: 'implausible',
+          });
+        }
+        patch['price_paise'] = inr * 100;
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw badRequest('Nothing to change.', { body: 'empty' });
+    }
+
+    const sets = Object.keys(patch).map((k, i) => `${k} = $${i + 2}`);
+    const updated = await ctx.db.query<{
+      id: string;
+      title: string;
+      description: string | null;
+      price_paise: string | null;
+      grade: string | null;
+      state: string;
+    }>(
+      `update listings set ${sets.join(', ')}
+        where id = $1
+        returning id, title, description, price_paise::text as price_paise, grade, state`,
+      [id, ...Object.values(patch)],
+    );
+
+    await audit(ctx, actorId, 'listing.edit', 'listing', id, before, patch);
+
+    const row = updated.rows[0]!;
+    return json({
+      listing: {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        priceInr: row.price_paise === null ? null : Number(row.price_paise) / 100,
+        grade: row.grade,
+        state: row.state,
+      },
+    });
+  });
+
+  /**
+   * DELETE /v1/admin/listings/:id/media/:mediaId — take a photograph down.
+   *
+   * The row goes; the file on disk stays. A photograph removed because it is
+   * disputed is evidence, and deleting the only copy of it is how a dispute
+   * becomes one person's word against another's.
+   */
+  router.add('DELETE', '/v1/admin/listings/:id/media/:mediaId', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+    const mediaId = ctx.params['mediaId'] ?? '';
+
+    const before = one(
+      await ctx.db.query<{ id: string; storage_key: string }>(
+        `select id, storage_key from media where id = $1 and listing_id = $2`,
+        [mediaId, id],
+      ),
+    );
+    if (before === null) throw notFound('No such photograph.');
+
+    await ctx.db.query(`delete from media where id = $1`, [mediaId]);
+    await audit(ctx, actorId, 'listing.media.remove', 'listing', id, before, null);
+
+    return json({ removed: mediaId });
   });
 
   /** POST /v1/admin/listings/:id/state — moderate a listing. */

@@ -27,6 +27,7 @@ export default function RootLayout() {
         <Stack.Screen name="listing/[id]" options={{ title: 'Note' }} />
         <Stack.Screen name="cart" options={{ title: 'Your cart' }} />
         <Stack.Screen name="sign-in" options={{ title: 'Sign in' }} />
+        <Stack.Screen name="address" options={{ title: 'Delivery address' }} />
       </Stack>
     </SessionProvider>
   );

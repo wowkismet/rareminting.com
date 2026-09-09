@@ -81,8 +81,14 @@ export default function Cart() {
     setBusy(false);
 
     if (!result.ok) {
-      // Nearly always "somebody else bought one of these" — the API names
-      // which, and that is the whole value of the message.
+      // No address on file is not something the buyer can fix by reading a
+      // message on this screen, so send them to the form instead. Everything
+      // else — nearly always "somebody else bought one of these" — is named
+      // by the API, and that is the whole value of the message.
+      if (result.message.toLowerCase().includes('delivery address')) {
+        router.push('/address');
+        return;
+      }
       setMessage(result.message);
       await load();
       return;

@@ -201,3 +201,106 @@ describe('who may upload', () => {
     assert.equal(res.status, 404);
   });
 });
+
+/**
+ * An admin uploading on a seller's behalf.
+ *
+ * The route exists because support often holds a better photograph than the
+ * one on the page. What matters is that it is still gated and still audited —
+ * a route that lets staff put a picture on anyone's listing silently is worse
+ * than not having one.
+ */
+function adminUpload(
+  token: string | null,
+  listingId: string,
+  bytes: Uint8Array,
+  filename: string,
+  type: string,
+): Promise<Response> {
+  const form = new FormData();
+  form.set('file', new File([bytes], filename, { type }), filename);
+  form.set('kind', 'detail');
+
+  return app.handle(
+    new Request(`http://api.test/v1/admin/listings/${listingId}/media`, {
+      method: 'POST',
+      ...(token === null ? {} : { headers: { authorization: `Bearer ${token}` } }),
+      body: form,
+    }),
+    TEST_IP,
+  );
+}
+
+async function makeAdmin(email: string): Promise<string> {
+  const res = await app.handle(
+    new Request('http://api.test/v1/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password: 'correct horse battery' }),
+    }),
+    TEST_IP,
+  );
+  const body = (await res.json()) as { token: string; user: { id: string } };
+  await pg.query(`insert into user_roles (user_id, role) values ($1, 'admin')`, [body.user.id]);
+  return body.token;
+}
+
+describe('an admin adding a photograph', () => {
+  it('accepts one on a listing belonging to someone else', async () => {
+    const owner = await seller('ma1@example.com');
+    const id = await listing(owner, '9AB 160001');
+    const admin = await makeAdmin('ma-admin1@example.com');
+
+    const res = await adminUpload(admin, id, JPEG, 'better.jpg', 'image/jpeg');
+    assert.equal(res.status, 201, await res.clone().text());
+
+    const body = (await res.json()) as { media: { url: string; kind: string } };
+    assert.match(body.media.url, /^\/media\//);
+    assert.equal(body.media.kind, 'detail');
+  });
+
+  it('writes an audit record naming the admin who did it', async () => {
+    const owner = await seller('ma2@example.com');
+    const id = await listing(owner, '9AB 160002');
+    const admin = await makeAdmin('ma-admin2@example.com');
+    assert.equal((await adminUpload(admin, id, JPEG, 'x.jpg', 'image/jpeg')).status, 201);
+
+    const log = await pg.query<{ action: string; entity_id: string; actor_id: string }>(
+      `select action, entity_id, actor_id::text as actor_id
+         from audit_logs where action = 'listing.media.add'`,
+    );
+    assert.equal(log.rows.length, 1);
+    assert.equal(log.rows[0]?.entity_id, id);
+    assert.notEqual(log.rows[0]?.actor_id, null);
+  });
+
+  it('is invisible to a seller who is not an admin', async () => {
+    const owner = await seller('ma3@example.com');
+    const id = await listing(owner, '9AB 160003');
+
+    // Not 403: the console does not confirm its own existence to a stranger.
+    assert.equal((await adminUpload(owner, id, JPEG, 'x.jpg', 'image/jpeg')).status, 404);
+  });
+
+  it('refuses a file that only claims to be an image', async () => {
+    const owner = await seller('ma4@example.com');
+    const id = await listing(owner, '9AB 160004');
+    const admin = await makeAdmin('ma-admin4@example.com');
+
+    const script = new TextEncoder().encode('#!/bin/sh\nrm -rf /\n');
+    const res = await adminUpload(admin, id, script, 'note.jpg', 'image/jpeg');
+    assert.equal(res.status, 400);
+  });
+
+  it('404s an unknown listing', async () => {
+    const admin = await makeAdmin('ma-admin5@example.com');
+    const res = await adminUpload(
+      admin,
+      '00000000-0000-0000-0000-000000000000',
+      JPEG,
+      'x.jpg',
+      'image/jpeg',
+    );
+    assert.equal(res.status, 404);
+  });
+});

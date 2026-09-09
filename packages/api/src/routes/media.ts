@@ -79,6 +79,80 @@ async function ownedListing(ctx: Ctx, listingId: string): Promise<{ id: string }
   return one(result);
 }
 
+/**
+ * Take one photograph off a request and store it against a listing.
+ *
+ * Shared by the seller's own upload and by an admin uploading on a seller's
+ * behalf, so the two cannot drift apart: the size cap, the magic-byte check
+ * and the generated filename are the same checks whoever is uploading. The
+ * caller decides who is allowed to do it; this decides what a file has to be.
+ */
+export async function storeUpload(
+  ctx: Ctx,
+  listingId: string,
+): Promise<{
+  id: string;
+  kind: MediaKind;
+  url: string;
+  contentType: string;
+  bytes: number;
+  sortOrder: number;
+}> {
+  let form: FormData;
+  try {
+    form = await ctx.req.formData();
+  } catch {
+    throw badRequest('Send the photograph as multipart form data.');
+  }
+
+  const file = form.get('file');
+  if (!(file instanceof File)) throw badRequest('Attach a photograph in the "file" field.');
+  if (file.size === 0) throw badRequest('That file is empty.');
+  if (file.size > MAX_BYTES) {
+    throw badRequest(`Photographs must be ${MAX_BYTES / 1024 / 1024} MB or smaller.`);
+  }
+
+  const kindValue = form.get('kind');
+  const kind: MediaKind =
+    typeof kindValue === 'string' && (MEDIA_KINDS as readonly string[]).includes(kindValue)
+      ? (kindValue as MediaKind)
+      : 'obverse';
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const detected = detectImage(bytes);
+  if (detected === null) {
+    throw badRequest('That does not look like a JPEG, PNG or WebP image.');
+  }
+
+  // Name generated here; nothing from the upload reaches the filesystem.
+  const id = randomUUID();
+  const storageKey = `${listingId}/${id}.${detected.extension}`;
+  const target = path.join(UPLOAD_DIR, storageKey);
+
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, bytes);
+
+  const inserted = await ctx.db.query<{ id: string; sort_order: number }>(
+    `insert into media (listing_id, kind, storage_key, content_type, bytes, sort_order)
+     values ($1, $2::media_kind, $3, $4, $5,
+             coalesce((select max(sort_order) + 1 from media where listing_id = $1), 0))
+     returning id, sort_order`,
+    [listingId, kind, storageKey, detected.contentType, bytes.length],
+  );
+
+  const row = inserted.rows[0];
+  if (row === undefined) throw new Error('failed to record media');
+
+  return {
+    id: row.id,
+    kind,
+    url: `${PUBLIC_PREFIX}/${storageKey}`,
+    contentType: detected.contentType,
+    bytes: bytes.length,
+    sortOrder: row.sort_order,
+  };
+}
+
 export function registerMediaRoutes(router: Router): void {
   /** POST /v1/listings/:id/media — upload one photograph. */
   router.add('POST', '/v1/listings/:id/media', async (ctx) => {
@@ -93,64 +167,7 @@ export function registerMediaRoutes(router: Router): void {
       throw forbidden('This listing belongs to another seller.');
     }
 
-    let form: FormData;
-    try {
-      form = await ctx.req.formData();
-    } catch {
-      throw badRequest('Send the photograph as multipart form data.');
-    }
-
-    const file = form.get('file');
-    if (!(file instanceof File)) throw badRequest('Attach a photograph in the "file" field.');
-    if (file.size === 0) throw badRequest('That file is empty.');
-    if (file.size > MAX_BYTES) {
-      throw badRequest(`Photographs must be ${MAX_BYTES / 1024 / 1024} MB or smaller.`);
-    }
-
-    const kindValue = form.get('kind');
-    const kind: MediaKind =
-      typeof kindValue === 'string' && (MEDIA_KINDS as readonly string[]).includes(kindValue)
-        ? (kindValue as MediaKind)
-        : 'obverse';
-
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const detected = detectImage(bytes);
-    if (detected === null) {
-      throw badRequest('That does not look like a JPEG, PNG or WebP image.');
-    }
-
-    // Name generated here; nothing from the upload reaches the filesystem.
-    const id = randomUUID();
-    const storageKey = `${listingId}/${id}.${detected.extension}`;
-    const target = path.join(UPLOAD_DIR, storageKey);
-
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, bytes);
-
-    const inserted = await ctx.db.query<{ id: string; sort_order: number }>(
-      `insert into media (listing_id, kind, storage_key, content_type, bytes, sort_order)
-       values ($1, $2::media_kind, $3, $4, $5,
-               coalesce((select max(sort_order) + 1 from media where listing_id = $1), 0))
-       returning id, sort_order`,
-      [listingId, kind, storageKey, detected.contentType, bytes.length],
-    );
-
-    const row = inserted.rows[0];
-    if (row === undefined) throw new Error('failed to record media');
-
-    return json(
-      {
-        media: {
-          id: row.id,
-          kind,
-          url: `${PUBLIC_PREFIX}/${storageKey}`,
-          contentType: detected.contentType,
-          bytes: bytes.length,
-          sortOrder: row.sort_order,
-        },
-      },
-      201,
-    );
+    return json({ media: await storeUpload(ctx, listingId) }, 201);
   });
 
   /** GET /v1/listings/:id/media — the photographs for a listing. */

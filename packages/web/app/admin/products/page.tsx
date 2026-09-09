@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { editListing, moderateListing } from '@/app/actions.ts';
+import { adminUploadPhoto, editListing, moderateListing } from '@/app/actions.ts';
 
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 import { DashboardShell } from '@/components/DashboardShell.tsx';
@@ -17,6 +17,7 @@ export const dynamic = 'force-dynamic';
 interface AdminListing {
   id: string;
   title: string;
+  description: string | null;
   state: string;
   priceInr: number | null;
   grade: string | null;
@@ -212,6 +213,18 @@ export default async function AdminProductsPage({
                                   ))}
                                 </select>
                               </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
+                                  Description
+                                </span>
+                                <textarea
+                                  name="description"
+                                  rows={5}
+                                  defaultValue={l.description ?? ''}
+                                  placeholder="What the buyer should know"
+                                  className="rounded-sm border border-sand-line bg-sand-raised px-2 py-1 text-xs leading-relaxed text-slate"
+                                />
+                              </label>
                               <button
                                 type="submit"
                                 className="rounded-full bg-primary px-3 py-1.5 text-xs text-cream transition-colors hover:bg-secondary"
@@ -220,6 +233,48 @@ export default async function AdminProductsPage({
                               </button>
                               <span className="text-[10px] leading-snug text-slate-dim">
                                 Every change is written to the audit log against your account.
+                                Leaving a box empty leaves that field as it is.
+                              </span>
+                            </form>
+
+                            {/* A separate form, because a file upload cannot
+                                ride along with a JSON patch — and because a
+                                photograph should not wait on the rest of the
+                                edit being valid. */}
+                            <form
+                              action={adminUploadPhoto}
+                              className="mt-2 flex w-56 flex-col gap-2 rounded-sm border border-sand-line bg-sand p-3"
+                            >
+                              <input type="hidden" name="listingId" value={l.id} />
+                              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
+                                Add a photograph
+                              </span>
+                              <select
+                                name="kind"
+                                defaultValue="obverse"
+                                className="rounded-sm border border-sand-line bg-sand-raised px-2 py-1 text-xs text-slate"
+                              >
+                                <option value="obverse">Front</option>
+                                <option value="reverse">Back</option>
+                                <option value="detail">Detail</option>
+                                <option value="uv">Under UV</option>
+                              </select>
+                              <input
+                                type="file"
+                                name="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                required
+                                className="text-[10px] text-slate-dim file:mr-2 file:rounded-full file:border file:border-sand-line file:bg-sand-raised file:px-2 file:py-1 file:text-[10px] file:text-slate"
+                              />
+                              <button
+                                type="submit"
+                                className="rounded-full border border-accent-deep px-3 py-1.5 text-xs text-accent-deep transition-colors hover:bg-accent-deep hover:text-cream"
+                              >
+                                Upload
+                              </button>
+                              <span className="text-[10px] leading-snug text-slate-dim">
+                                JPEG, PNG or WebP, up to 10 MB. It is added alongside the
+                                seller&rsquo;s own photographs rather than replacing them.
                               </span>
                             </form>
                           </details>

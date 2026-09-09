@@ -15,6 +15,7 @@ import { badRequest, conflict, forbidden, notFound, unauthorized } from '../erro
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { one } from '../db.ts';
 import { csvName, csvResponse, toCsv } from '../csv.ts';
+import { storeUpload } from './media.ts';
 
 const KYC_STATES = ['pending', 'under_review', 'verified', 'rejected', 'suspended'] as const;
 const LISTING_STATES = ['pending_review', 'minted', 'withdrawn', 'rejected'] as const;
@@ -511,6 +512,7 @@ export function registerAdminRoutes(router: Router): void {
     const rows = await ctx.db.query<{
       id: string;
       title: string;
+      description: string | null;
       state: string;
       price_paise: string | null;
       grade: string | null;
@@ -519,7 +521,7 @@ export function registerAdminRoutes(router: Router): void {
       serial_digits: string | null;
       created_at: string;
     }>(
-      `select l.id, l.title, l.state, l.price_paise::text as price_paise, l.grade,
+      `select l.id, l.title, l.description, l.state, l.price_paise::text as price_paise, l.grade,
               l.seller_id, s.display_name as seller_name, n.serial_digits,
               l.created_at::text as created_at
          from listings l
@@ -536,6 +538,7 @@ export function registerAdminRoutes(router: Router): void {
       listings: rows.rows.map((r) => ({
         id: r.id,
         title: r.title,
+        description: r.description,
         state: r.state,
         priceInr: r.price_paise === null ? null : Number(r.price_paise) / 100,
         grade: r.grade,
@@ -654,6 +657,34 @@ export function registerAdminRoutes(router: Router): void {
         state: row.state,
       },
     });
+  });
+
+  /**
+   * POST /v1/admin/listings/:id/media — add a photograph to any listing.
+   *
+   * Sellers photograph badly, or not at all, and support ends up holding a
+   * better picture than the one on the page. The file goes through exactly the
+   * checks a seller's own upload does — same size cap, same magic-byte test —
+   * because an admin uploading is still an upload. It is audited, so a
+   * photograph that appeared on somebody else's listing has a name against it.
+   */
+  router.add('POST', '/v1/admin/listings/:id/media', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+
+    const listing = one(
+      await ctx.db.query<{ id: string }>(`select id from listings where id = $1`, [id]),
+    );
+    if (listing === null) throw notFound('No such listing.');
+
+    const media = await storeUpload(ctx, id);
+    await audit(ctx, actorId, 'listing.media.add', 'listing', id, null, {
+      mediaId: media.id,
+      kind: media.kind,
+      bytes: media.bytes,
+    });
+
+    return json({ media }, 201);
   });
 
   /**

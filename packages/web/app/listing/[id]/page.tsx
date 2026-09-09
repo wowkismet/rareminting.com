@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { addToCart, buyNow, publishListing, saveForLater, uploadPhoto } from '@/app/actions.ts';
+import { NoteDetail } from '@/components/NoteDetail.tsx';
 import { NotePhotos, PhotoUpload } from '@/components/NotePhotos.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
@@ -62,9 +63,10 @@ export default async function ListingPage({
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
             {listing.state === 'minted' ? 'Minted' : listing.state}
           </p>
-          {dash === null && (
-            <h1 className="mt-2 font-display text-3xl text-slate">{listing.title}</h1>
-          )}
+          {/* The title leads the page for everyone. A seller viewing their own
+              item gets it in the dashboard header too, but repeating it above
+              the photographs costs nothing and keeps one layout, not two. */}
+          <h1 className="mt-2 font-display text-3xl text-slate">{listing.title}</h1>
         </div>
 
         <NotePhotos media={listing.media ?? []} title={listing.title} />
@@ -182,6 +184,19 @@ export default async function ListingPage({
             </ul>
           </section>
         )}
+
+        {/* The written account, at the foot of the page. Composed from what the
+            site actually knows, so a listing reads properly even where the
+            seller wrote nothing. */}
+        <NoteDetail
+          title={listing.title}
+          description={listing.description}
+          note={listing.note}
+          grade={listing.grade}
+          dates={listing.dates}
+          patterns={listing.patterns?.map((p) => p.code)}
+          sellerName={listing.sellerName}
+        />
 
         {listing.patterns !== undefined && listing.patterns.length > 0 && (
           <section>

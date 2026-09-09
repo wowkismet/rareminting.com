@@ -134,6 +134,9 @@ interface ListingRow {
   grade: string | null;
   published_at: Date | string | null;
   created_at: Date | string;
+  // Joined from sellers, so a description can be attributed to the person who
+  // wrote it. Optional because the list queries do not join.
+  seller_name?: string;
 }
 
 interface NoteRow {
@@ -182,6 +185,7 @@ function publicListing(
     kind: listing.kind,
     title: listing.title,
     description: listing.description,
+    ...(listing.seller_name === undefined ? {} : { sellerName: listing.seller_name }),
     state: listing.state,
     saleMode: listing.sale_mode,
     priceInr: (() => {
@@ -584,9 +588,12 @@ export function registerListingRoutes(router: Router, database: Database): void 
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
 
     const listingResult = await ctx.db.query<ListingRow>(
-      `select id, seller_id, kind, title, description, state, sale_mode,
-              price_paise, grade, published_at, created_at
-         from listings where id = $1`,
+      `select l.id, l.seller_id, l.kind, l.title, l.description, l.state, l.sale_mode,
+              l.price_paise, l.grade, l.published_at, l.created_at,
+              s.display_name as seller_name
+         from listings l
+         join sellers s on s.id = l.seller_id
+        where l.id = $1`,
       [id],
     );
     const listing = one(listingResult);

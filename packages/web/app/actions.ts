@@ -610,6 +610,35 @@ export async function uploadPhoto(data: FormData): Promise<void> {
   revalidatePath(`/listing/${listingId}`);
 }
 
+/**
+ * Add a photograph to any listing, as an admin.
+ *
+ * The same forwarding as a seller's own upload, pointed at the admin route —
+ * which is where the permission check and the audit record live. Support ends
+ * up holding a better photograph than the one on the page often enough that
+ * asking the seller to re-upload it is not a workable answer.
+ */
+export async function adminUploadPhoto(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const file = data.get('file');
+  if (listingId === '' || !(file instanceof File) || file.size === 0) return;
+
+  const forward = new FormData();
+  forward.set('file', file, file.name);
+  forward.set('kind', text(data, 'kind') || 'obverse');
+
+  await fetch(
+    `${process.env['API_URL'] ?? 'http://127.0.0.1:4000'}/v1/admin/listings/${listingId}/media`,
+    { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: forward },
+  ).catch(() => undefined);
+
+  revalidatePath('/admin/products');
+  revalidatePath(`/listing/${listingId}`);
+}
+
 /* ---------------- buying ---------------- */
 
 export async function buyNow(data: FormData): Promise<void> {

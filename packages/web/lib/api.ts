@@ -118,6 +118,10 @@ export interface ApiListing {
   sellerId?: string;
   id: string;
   title: string;
+  // The seller's own words about the item, and who wrote them. Only the
+  // single-listing endpoint joins the seller, so the name is optional.
+  description?: string | null;
+  sellerName?: string;
   state: string;
   saleMode?: string;
   kind?: string;

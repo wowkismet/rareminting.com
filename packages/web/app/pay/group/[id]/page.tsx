@@ -14,7 +14,16 @@ export const dynamic = 'force-dynamic';
 const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
 
 interface Group {
-  group: { id: string; groupNumber: string; totalInr: number; placedAt: string | null };
+  group: {
+    id: string;
+    groupNumber: string;
+    deliveryInr: number;
+    insuranceInr: number;
+    giftPackingInr: number;
+    discountInr: number;
+    totalInr: number;
+    placedAt: string | null;
+  };
   orders: {
     id: string;
     orderNumber: string;
@@ -49,6 +58,13 @@ export default async function PayGroupPage({ params }: { params: Promise<{ id: s
   const { group, orders } = result.data;
   const settled = orders.every((o) => PAID.includes(o.state));
   const items = orders.reduce((n, o) => n + o.items.length, 0);
+
+  // The notes alone, worked back from what each seller's part came to. Shown
+  // as its own line so the extras are visibly extras.
+  const notesTotal = orders.reduce(
+    (sum, o) => sum + o.items.reduce((n, i) => n + i.priceInr, 0),
+    0,
+  );
 
   return (
     <DashboardShell
@@ -86,6 +102,29 @@ export default async function PayGroupPage({ params }: { params: Promise<{ id: s
         ))}
 
         <div className="rounded-sm border border-sand-line bg-sand-raised p-5">
+          {/* The bill, line by line. A total nobody can take apart is a total
+              somebody writes in about. */}
+          <dl className="mb-4 flex flex-col gap-2 border-b border-sand-line pb-4 text-sm">
+            {(
+              [
+                ['Notes', notesTotal, false],
+                ['Delivery', group.deliveryInr, false],
+                ['Insurance', group.insuranceInr, false],
+                ['Gift packaging', group.giftPackingInr, false],
+                ['Discount', -group.discountInr, true],
+              ] as const
+            )
+              .filter(([label, value]) => value !== 0 || label === 'Notes' || label === 'Delivery')
+              .map(([label, value, isDiscount]) => (
+                <div key={label} className="flex items-baseline justify-between gap-3">
+                  <dt className="text-slate-dim">{label}</dt>
+                  <dd className={`tabular-nums ${isDiscount ? 'text-accent-deep' : 'text-slate'}`}>
+                    {label === 'Delivery' && value === 0 ? 'Free' : rupees(value)}
+                  </dd>
+                </div>
+              ))}
+          </dl>
+
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">

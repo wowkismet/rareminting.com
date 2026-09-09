@@ -328,13 +328,18 @@ export async function editListing(data: FormData): Promise<void> {
  * else bought one of these", and the buyer needs to be told which rather than
  * left looking at a button that did nothing.
  */
-export async function checkoutCart(): Promise<void> {
+export async function checkoutCart(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');
 
   const result = await api<{ group: { id: string } }>('/v1/cart/checkout', {
     method: 'POST',
     token,
+    body: {
+      insurance: text(data, 'insurance') === 'yes',
+      giftPacking: text(data, 'giftPacking') === 'yes',
+      ...(text(data, 'coupon') === '' ? {} : { coupon: text(data, 'coupon') }),
+    },
   });
 
   revalidatePath('/cart');

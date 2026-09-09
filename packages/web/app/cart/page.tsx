@@ -3,6 +3,15 @@ import { redirect } from 'next/navigation';
 
 import { buyNow, removeFromCart, saveForLater } from '@/app/actions.ts';
 import { checkoutCart } from '@/app/actions.ts';
+
+/**
+ * Kept in step with packages/api/src/charges.ts, which is where they are set
+ * and which decides what is actually charged. These exist so the cart can show
+ * a total before the buyer commits; if the two ever disagree, the API wins and
+ * the payment page shows the truth.
+ */
+const DELIVERY_PER_SELLER = 60;
+const FREE_DELIVERY_ABOVE = 5000;
 import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
@@ -45,8 +54,15 @@ export default async function CartPage({
   const buyable = items.filter((i) => i.available);
   const unavailable = items.length - buyable.length;
   const sellerCount = new Set(buyable.map((i) => i.sellerName)).size;
+
   const total = cart.ok ? (cart.data.totalInr ?? 0) : 0;
   const myOrders = orders.ok ? orders.data.orders.filter((o) => o.role !== 'seller').length : 0;
+
+  // Shown so the buyer can see the total before committing. The API works
+  // these out again at checkout and its answer is the one that is charged —
+  // this is a preview, not the price.
+  const freeDelivery = total >= FREE_DELIVERY_ABOVE;
+  const delivery = freeDelivery ? 0 : DELIVERY_PER_SELLER * Math.max(sellerCount, 1);
 
   return (
     <DashboardShell
@@ -179,42 +195,109 @@ export default async function CartPage({
               ))}
             </ul>
 
-            <div className="rounded-sm border border-sand-line bg-sand-raised p-5">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">
-                    One payment
-                  </p>
-                  <p className="mt-1 font-display text-2xl text-slate">{rupees(total)}</p>
-                  <p className="mt-1 text-xs text-slate-dim">
+            <form
+              action={checkoutCart}
+              className="rounded-sm border border-sand-line bg-sand-raised p-5"
+            >
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">
+                What you will be charged
+              </p>
+
+              {/* Every line separately, so nothing on the total is a surprise. */}
+              <dl className="mt-4 flex flex-col gap-2 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-slate-dim">
                     {buyable.length} item{buyable.length === 1 ? '' : 's'}
                     {sellerCount > 1 && ` from ${sellerCount} sellers`}
-                    {unavailable > 0 &&
-                      ` · ${unavailable} no longer available, and not charged for`}
-                  </p>
+                  </dt>
+                  <dd className="tabular-nums text-slate">{rupees(total)}</dd>
                 </div>
 
-                <form action={checkoutCart}>
-                  <button
-                    type="submit"
-                    disabled={buyable.length === 0}
-                    className="rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Checkout
-                  </button>
-                </form>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-slate-dim">
+                    Delivery
+                    {!freeDelivery && sellerCount > 1 && (
+                      <span className="text-xs"> · ₹60 per seller, each posts separately</span>
+                    )}
+                  </dt>
+                  <dd className="tabular-nums text-slate">
+                    {freeDelivery ? (
+                      <span className="text-accent-deep">Free</span>
+                    ) : (
+                      rupees(delivery)
+                    )}
+                  </dd>
+                </div>
+
+                {!freeDelivery && (
+                  <p className="text-xs text-slate-dim">
+                    Free above {rupees(FREE_DELIVERY_ABOVE)} — {rupees(FREE_DELIVERY_ABOVE - total)}{' '}
+                    more to go.
+                  </p>
+                )}
+              </dl>
+
+              {/* Optional extras, each priced before it is chosen. */}
+              <fieldset className="mt-5 flex flex-col gap-3 border-t border-sand-line pt-4">
+                <legend className="sr-only">Optional extras</legend>
+
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" name="insurance" value="yes" className="mt-1" />
+                  <span>
+                    <span className="block text-sm text-slate">
+                      Insure the parcel — {rupees(Math.max(Math.round(total * 0.005), 25))}
+                    </span>
+                    <span className="block text-xs leading-relaxed text-slate-dim">
+                      0.5% of the value, minimum ₹25. Covers loss or damage in transit against the
+                      value declared here.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" name="giftPacking" value="yes" className="mt-1" />
+                  <span>
+                    <span className="block text-sm text-slate">Gift packaging — ₹149</span>
+                    <span className="block text-xs leading-relaxed text-slate-dim">
+                      A box and a card rather than a padded envelope.
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
+
+              <div className="mt-5 flex flex-wrap items-end gap-3 border-t border-sand-line pt-4">
+                <label className="flex flex-1 flex-col gap-1">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">
+                    Coupon code
+                  </span>
+                  <input
+                    name="coupon"
+                    maxLength={32}
+                    placeholder="If you have one"
+                    className="rounded-sm border border-sand-line bg-sand px-3 py-2 font-mono text-sm uppercase text-slate"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={buyable.length === 0}
+                  className="rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Checkout
+                </button>
               </div>
 
               <p className="mt-4 border-t border-sand-line pt-4 text-sm leading-relaxed text-slate-dim">
-                You pay once, however many sellers are in the basket. Each note is dispatched
-                separately by its own seller, and your payment is held until it reaches you and the{' '}
+                The exact total, with any discount applied, is shown before you pay — nothing is
+                charged from this page. You pay once, however many sellers are in the basket, and
+                your money is held until each note reaches you and the{' '}
                 <a href="/refunds" className="text-accent-deep underline underline-offset-4">
                   inspection window
                 </a>{' '}
-                closes. Nothing here is reserved until you check out — if a note sells in the
-                meantime, we will tell you which one and charge you for nothing.
+                closes.
+                {unavailable > 0 &&
+                  ` ${unavailable} item${unavailable === 1 ? '' : 's'} in this basket ${unavailable === 1 ? 'is' : 'are'} no longer available and will not be charged for.`}
               </p>
-            </div>
+            </form>
           </>
         )}
       </div>

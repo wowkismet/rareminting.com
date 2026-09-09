@@ -22,8 +22,11 @@
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
 import { conflict, unauthorized } from '../errors.ts';
+import { asObject } from '../validate.ts';
 import type { Database } from '../db.ts';
 import { computeBreakdown, DEFAULT_RATES, type Rates } from '../money.ts';
+import { computeCharges } from '../charges.ts';
+import { checkCoupon } from './coupons.ts';
 
 interface CartRow {
   listing_id: string;
@@ -60,6 +63,14 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
   router.add('POST', '/v1/cart/checkout', async (ctx: Ctx) => {
     if (ctx.session === null) throw unauthorized();
     const buyerId = ctx.session.userId;
+
+    const options = asObject(await ctx.body());
+    const wantsInsurance = options['insurance'] === true;
+    const wantsGiftPacking = options['giftPacking'] === true;
+    const couponCode =
+      typeof options['coupon'] === 'string' && options['coupon'].trim() !== ''
+        ? options['coupon'].trim()
+        : null;
 
     const cart = await ctx.db.query<CartRow>(
       `select c.listing_id, l.seller_id, s.kind as seller_kind, l.title,
@@ -238,10 +249,69 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
         });
       }
 
-      await tx.query(`update order_groups set total_paise = $2 where id = $1`, [
-        groupId,
-        groupTotal,
-      ]);
+      // Charges, once, across the basket. Delivery is per seller because each
+      // posts their own parcel; insurance and gift packing are per basket.
+      const charges = computeCharges({
+        subtotalPaise: groupTotal,
+        sellerCount: bySeller.size,
+        wantsInsurance,
+        wantsGiftPacking,
+      });
+
+      // The coupon is redeemed inside this transaction, under a lock, so two
+      // people cannot spend the last one at the same moment. Checked again
+      // here rather than trusting what the checkout page was told: the basket
+      // may have changed since.
+      let discountPaise = 0;
+      let couponId: string | null = null;
+      if (couponCode !== null) {
+        const checked = await checkCoupon(ctx, couponCode, buyerId, groupTotal);
+        if (!checked.ok) throw conflict(checked.reason);
+
+        const claimed = await tx.query<{ id: string }>(
+          `update coupons
+              set used_count = used_count + 1
+            where id = $1
+              and is_active = true
+              and (usage_limit is null or used_count < usage_limit)
+            returning id`,
+          [checked.coupon.id],
+        );
+        if (claimed.rows.length === 0) {
+          throw conflict('That code was fully claimed a moment ago. Nothing has been charged.');
+        }
+
+        discountPaise = checked.discountPaise;
+        couponId = checked.coupon.id;
+      }
+
+      const payable =
+        charges.beforeDiscountPaise - discountPaise;
+
+      await tx.query(
+        `update order_groups
+            set total_paise = $2, delivery_paise = $3, insurance_paise = $4,
+                gift_paise = $5, discount_paise = $6,
+                insured_value_paise = $7
+          where id = $1`,
+        [
+          groupId,
+          payable,
+          charges.deliveryPaise,
+          charges.insurancePaise,
+          charges.giftPaise,
+          discountPaise,
+          wantsInsurance ? groupTotal : null,
+        ],
+      );
+
+      if (couponId !== null) {
+        await tx.query(
+          `insert into coupon_redemptions (coupon_id, order_group_id, buyer_id, discount_paise)
+           values ($1, $2, $3, $4)`,
+          [couponId, groupId, buyerId, discountPaise],
+        );
+      }
 
       // The basket has become an order; leaving it filled would let the same
       // notes be checked out twice.
@@ -252,7 +322,14 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
           group: {
             id: groupId,
             groupNumber: group.rows[0]!.group_number,
-            totalInr: groupTotal / 100,
+            /** Every line the buyer was shown, so a receipt reconstructs. */
+            subtotalInr: groupTotal / 100,
+            deliveryInr: charges.deliveryPaise / 100,
+            deliveryWaived: charges.deliveryWaived,
+            insuranceInr: charges.insurancePaise / 100,
+            giftPackingInr: charges.giftPaise / 100,
+            discountInr: discountPaise / 100,
+            totalInr: payable / 100,
             sellers: orders.length,
             items: cart.rows.length,
           },
@@ -278,9 +355,17 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       group_number: string;
       buyer_id: string;
       total_paise: string;
+      delivery_paise: string;
+      insurance_paise: string;
+      gift_paise: string;
+      discount_paise: string;
       placed_at: string | null;
     }>(
       `select id, group_number, buyer_id, total_paise::text as total_paise,
+              delivery_paise::text  as delivery_paise,
+              insurance_paise::text as insurance_paise,
+              gift_paise::text      as gift_paise,
+              discount_paise::text  as discount_paise,
               placed_at::text as placed_at
          from order_groups where id = $1`,
       [id],
@@ -341,6 +426,11 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       group: {
         id: g.id,
         groupNumber: g.group_number,
+        /** Every line, so the page can show what the total is made of. */
+        deliveryInr: Number(g.delivery_paise) / 100,
+        insuranceInr: Number(g.insurance_paise) / 100,
+        giftPackingInr: Number(g.gift_paise) / 100,
+        discountInr: Number(g.discount_paise) / 100,
         totalInr: Number(g.total_paise) / 100,
         placedAt: g.placed_at,
       },

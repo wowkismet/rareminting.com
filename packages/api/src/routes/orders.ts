@@ -113,6 +113,24 @@ export function registerOrderRoutes(router: Router, database: Database): void {
 
     const buyerId = ctx.session.userId;
 
+    // Buy-now goes straight to a payment page without passing the cart, so if
+    // the address were only asked for at cart checkout this route would still
+    // take money with nowhere to send the note. It uses the buyer's default
+    // rather than asking again — somebody who has one has already answered
+    // this question — and refuses outright when there is none.
+    const address = one(
+      await ctx.db.query<{ id: string }>(
+        `select id from addresses
+          where user_id = $1 and kind = 'shipping'
+          order by is_default desc, created_at desc
+          limit 1`,
+        [buyerId],
+      ),
+    );
+    if (address === null) {
+      throw badRequest('Add a delivery address before buying.', { addressId: 'required' });
+    }
+
     const order = await database.transaction(async (tx) => {
       // Conditional on the listing still being minted. If another buyer got
       // there first this matches nothing, and the throw rolls the order back.
@@ -131,9 +149,9 @@ export function registerOrderRoutes(router: Router, database: Database): void {
            (order_number, buyer_id, seller_id, listing_id, state,
             subtotal_paise, shipping_paise, buyer_premium_paise,
             commission_paise, gst_on_commission_paise, tds_paise, total_paise,
-            placed_at)
+            placed_at, shipping_address_id)
          values ($1, $2, $3, $4, 'payment_pending',
-                 $5, $6, $7, $8, $9, $10, $11, now())
+                 $5, $6, $7, $8, $9, $10, $11, now(), $12)
          returning id, order_number, state`,
         [
           orderNumber(),
@@ -147,6 +165,7 @@ export function registerOrderRoutes(router: Router, database: Database): void {
           breakdown.gstOnCommissionPaise,
           breakdown.tdsPaise,
           breakdown.totalPaise,
+          address.id,
         ],
       );
 

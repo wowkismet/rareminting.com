@@ -336,6 +336,7 @@ export async function checkoutCart(data: FormData): Promise<void> {
     method: 'POST',
     token,
     body: {
+      addressId: text(data, 'addressId'),
       insurance: text(data, 'insurance') === 'yes',
       giftPacking: text(data, 'giftPacking') === 'yes',
       ...(text(data, 'coupon') === '' ? {} : { coupon: text(data, 'coupon') }),
@@ -347,6 +348,68 @@ export async function checkoutCart(data: FormData): Promise<void> {
     redirect(`/cart?error=${encodeURIComponent(result.error.message)}`);
   }
   redirect(`/pay/group/${result.data.group.id}`);
+}
+
+/* ----------------------------- addresses ----------------------------- */
+
+/**
+ * Add a delivery address.
+ *
+ * Lands back where the buyer was — usually the cart, mid-checkout — so adding
+ * an address is not a detour that loses their basket. A failure comes back
+ * with its reason rather than silently doing nothing, because the two things
+ * most often wrong are a PIN code and a phone number, and both are fixable in
+ * a second if somebody is told which.
+ */
+export async function addAddress(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const back = text(data, 'back') === '' ? '/account/addresses' : text(data, 'back');
+
+  const result = await api('/v1/addresses', {
+    method: 'POST',
+    token,
+    body: {
+      recipientName: text(data, 'recipientName'),
+      line1: text(data, 'line1'),
+      line2: text(data, 'line2'),
+      city: text(data, 'city'),
+      state: text(data, 'state'),
+      postalCode: text(data, 'postalCode'),
+      phone: text(data, 'phone'),
+      isDefault: text(data, 'isDefault') === 'yes',
+    },
+  });
+
+  revalidatePath('/cart');
+  revalidatePath('/account/addresses');
+  if (!result.ok) redirect(`${back}?error=${encodeURIComponent(result.error.message)}`);
+  redirect(back);
+}
+
+export async function makeAddressDefault(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const id = text(data, 'addressId');
+  if (id === '') return;
+
+  await api(`/v1/addresses/${id}`, { method: 'PATCH', token, body: { isDefault: true } });
+  revalidatePath('/cart');
+  revalidatePath('/account/addresses');
+}
+
+export async function deleteAddress(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const id = text(data, 'addressId');
+  if (id === '') return;
+
+  await api(`/v1/addresses/${id}`, { method: 'DELETE', token });
+  revalidatePath('/cart');
+  revalidatePath('/account/addresses');
 }
 
 /* ------------------------------ banners ------------------------------ */
@@ -654,6 +717,13 @@ export async function buyNow(data: FormData): Promise<void> {
   });
 
   if (!result.ok) {
+    // No address on file is not really a listing-page problem — the buyer
+    // needs the form, which lives on the cart. Send them there with the note
+    // in the basket, so the thing they were buying is not lost on the way.
+    if (result.error.message.toLowerCase().includes('delivery address')) {
+      await api('/v1/cart', { method: 'POST', token, body: { listingId } });
+      redirect(`/cart?error=${encodeURIComponent('Add a delivery address to finish this order.')}`);
+    }
     // The listing page shows the reason; nothing is half-created either way.
     redirect(`/listing/${listingId}?error=${encodeURIComponent(result.error.message)}`);
   }

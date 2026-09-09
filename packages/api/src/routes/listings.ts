@@ -478,6 +478,19 @@ export function registerListingRoutes(router: Router, database: Database): void 
       const q = ctx.url.searchParams.get('q')?.trim();
       const query = q === undefined || q === '' ? null : q;
 
+      // Price bounds, in whole rupees on the wire and paise underneath. A
+      // non-numeric or negative bound is treated as absent rather than as an
+      // error: it comes from a text box on the browse page, and an empty
+      // filter is the sensible reading of a half-typed one.
+      const bound = (name: string): number | null => {
+        const raw = ctx.url.searchParams.get(name);
+        if (raw === null || raw.trim() === '') return null;
+        const n = Number(raw);
+        return Number.isFinite(n) && n >= 0 ? Math.round(n) * 100 : null;
+      };
+      const minPaise = bound('minPrice');
+      const maxPaise = bound('maxPrice');
+
       const rows = await ctx.db.query<
         ListingRow & { thumb: string | null } & Partial<NoteRow>
       >(
@@ -496,9 +509,11 @@ export function registerListingRoutes(router: Router, database: Database): void 
             and ($4::text is null
                  or n.serial_digits ilike '%' || $4 || '%'
                  or l.title         ilike '%' || $4 || '%')
+            and ($5::bigint is null or l.price_paise >= $5::bigint)
+            and ($6::bigint is null or l.price_paise <= $6::bigint)
           order by ${orderBy}
           limit $1`,
-        [limit, codes, kindParam, query],
+        [limit, codes, kindParam, query, minPaise, maxPaise],
       );
 
       // The true number matching, not the number on this page. The homepage
@@ -516,8 +531,10 @@ export function registerListingRoutes(router: Router, database: Database): void 
             and ($2::text is null or l.kind = $2::item_kind)
             and ($3::text is null
                  or n.serial_digits ilike '%' || $3 || '%'
-                 or l.title         ilike '%' || $3 || '%')`,
-        [codes, kindParam, query],
+                 or l.title         ilike '%' || $3 || '%')
+            and ($4::bigint is null or l.price_paise >= $4::bigint)
+            and ($5::bigint is null or l.price_paise <= $5::bigint)`,
+        [codes, kindParam, query, minPaise, maxPaise],
       );
 
       return json({

@@ -21,9 +21,9 @@
 
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
-import { conflict, unauthorized } from '../errors.ts';
+import { badRequest, conflict, unauthorized } from '../errors.ts';
 import { asObject } from '../validate.ts';
-import type { Database } from '../db.ts';
+import { one, type Database } from '../db.ts';
 import { computeBreakdown, DEFAULT_RATES, type Rates } from '../money.ts';
 import { computeCharges } from '../charges.ts';
 import { checkCoupon } from './coupons.ts';
@@ -71,6 +71,39 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       typeof options['coupon'] === 'string' && options['coupon'].trim() !== ''
         ? options['coupon'].trim()
         : null;
+
+    // Where it is going, settled before any money moves. Until now a buyer
+    // could pay without ever saying where to send the parcel, which left
+    // support chasing an address after the fact on every single order.
+    //
+    // The chosen one if the cart sent one, otherwise their default — the same
+    // rule the single-listing buy route follows, so the two cannot disagree
+    // about where a note goes. Either way the id is matched against the
+    // buyer's own rows, so a swapped id in the request reaches nothing.
+    const addressId = typeof options['addressId'] === 'string' ? options['addressId'] : '';
+    const address = one(
+      await ctx.db.query<{
+        id: string;
+        recipient_name: string;
+        line1: string;
+        line2: string | null;
+        city: string;
+        state: string;
+        postal_code: string;
+        phone_e164: string | null;
+      }>(
+        `select id, recipient_name, line1, line2, city, state, postal_code, phone_e164
+           from addresses
+          where user_id = $1 and kind = 'shipping'
+            and ($2::uuid is null or id = $2::uuid)
+          order by is_default desc, created_at desc
+          limit 1`,
+        [buyerId, /^[0-9a-f-]{36}$/i.test(addressId) ? addressId : null],
+      ),
+    );
+    if (address === null) {
+      throw badRequest('Choose a delivery address before paying.', { addressId: 'required' });
+    }
 
     const cart = await ctx.db.query<CartRow>(
       `select c.listing_id, l.seller_id, s.kind as seller_kind, l.title,
@@ -175,10 +208,28 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       const orders: { id: string; orderNumber: string; sellerId: string; totalPaise: number }[] = [];
 
       const group = await tx.query<{ id: string; group_number: string }>(
-        `insert into order_groups (group_number, buyer_id, total_paise, placed_at)
-         values ($1, $2, 1, now())
+        // The address is stored twice on purpose: by reference, so "send it
+        // here" still points at the book, and as text, so the invoice keeps
+        // saying what it said on the day it was issued even after the buyer
+        // moves house or deletes the entry.
+        `insert into order_groups (group_number, buyer_id, total_paise, placed_at,
+                                   shipping_address_id, bill_to_name, bill_to_line1,
+                                   bill_to_line2, bill_to_city, bill_to_state,
+                                   bill_to_pin, bill_to_phone)
+         values ($1, $2, 1, now(), $3, $4, $5, $6, $7, $8, $9, $10)
          returning id, group_number`,
-        [reference('RMG'), buyerId],
+        [
+          reference('RMG'),
+          buyerId,
+          address.id,
+          address.recipient_name,
+          address.line1,
+          address.line2,
+          address.city,
+          address.state,
+          address.postal_code,
+          address.phone_e164,
+        ],
       );
       const groupId = group.rows[0]!.id;
 
@@ -360,13 +411,22 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       gift_paise: string;
       discount_paise: string;
       placed_at: string | null;
+      bill_to_name: string | null;
+      bill_to_line1: string | null;
+      bill_to_line2: string | null;
+      bill_to_city: string | null;
+      bill_to_state: string | null;
+      bill_to_pin: string | null;
+      bill_to_phone: string | null;
     }>(
       `select id, group_number, buyer_id, total_paise::text as total_paise,
               delivery_paise::text  as delivery_paise,
               insurance_paise::text as insurance_paise,
               gift_paise::text      as gift_paise,
               discount_paise::text  as discount_paise,
-              placed_at::text as placed_at
+              placed_at::text as placed_at,
+              bill_to_name, bill_to_line1, bill_to_line2, bill_to_city,
+              bill_to_state, bill_to_pin, bill_to_phone
          from order_groups where id = $1`,
       [id],
     );
@@ -433,6 +493,23 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
         discountInr: Number(g.discount_paise) / 100,
         totalInr: Number(g.total_paise) / 100,
         placedAt: g.placed_at,
+        /**
+         * Who the bill is made out to, as it was on the day. Null only on the
+         * groups placed before an address was asked for; the page says so
+         * rather than printing an invoice with a blank name on it.
+         */
+        billTo:
+          g.bill_to_name === null
+            ? null
+            : {
+                name: g.bill_to_name,
+                line1: g.bill_to_line1,
+                line2: g.bill_to_line2,
+                city: g.bill_to_city,
+                state: g.bill_to_state,
+                postalCode: g.bill_to_pin,
+                phone: g.bill_to_phone,
+              },
       },
       orders: [...byOrder.values()],
     });

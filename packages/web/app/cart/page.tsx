@@ -12,6 +12,7 @@ import { checkoutCart } from '@/app/actions.ts';
  */
 const DELIVERY_PER_SELLER = 60;
 const FREE_DELIVERY_ABOVE = 5000;
+import { AddressForm, AddressPicker, type Address } from '@/components/AddressPicker.tsx';
 import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
@@ -42,12 +43,15 @@ export default async function CartPage({
   if (user === null) redirect('/signin');
 
   const token = await sessionToken();
-  const [cart, saved, orders, seller] = await Promise.all([
+  const [cart, saved, orders, seller, addressResult] = await Promise.all([
     api<BasketResponse>('/v1/cart', { token }),
     api<BasketResponse>('/v1/saved', { token }),
     api<{ orders: { role: string }[] }>('/v1/orders', { token }),
     currentSeller(),
+    api<{ addresses: Address[] }>('/v1/addresses', { token }),
   ]);
+
+  const addresses = addressResult.ok ? addressResult.data.addresses : [];
 
   const items = cart.ok ? cart.data.items : [];
   const gone = items.filter((i) => !i.available);
@@ -237,6 +241,13 @@ export default async function CartPage({
                 )}
               </dl>
 
+              {/* Where it goes, before what it costs to send. Nothing can be
+                  charged without one, so it is on the page rather than behind
+                  a step the buyer reaches only after committing. */}
+              <div className="mt-5">
+                <AddressPicker addresses={addresses} />
+              </div>
+
               {/* Optional extras, each priced before it is chosen. */}
               <fieldset className="mt-5 flex flex-col gap-3 border-t border-sand-line pt-4">
                 <legend className="sr-only">Optional extras</legend>
@@ -279,7 +290,7 @@ export default async function CartPage({
                 </label>
                 <button
                   type="submit"
-                  disabled={buyable.length === 0}
+                  disabled={buyable.length === 0 || addresses.length === 0}
                   className="rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Checkout
@@ -298,6 +309,11 @@ export default async function CartPage({
                   ` ${unavailable} item${unavailable === 1 ? '' : 's'} in this basket ${unavailable === 1 ? 'is' : 'are'} no longer available and will not be charged for.`}
               </p>
             </form>
+
+            {/* Outside the checkout form on purpose. A form inside a form is
+                invalid, and browsers resolve it by dropping the inner one —
+                the address would appear to save and never arrive. */}
+            <AddressForm back="/cart" />
           </>
         )}
       </div>

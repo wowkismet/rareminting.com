@@ -13,7 +13,11 @@ import { currentSeller, currentUser } from '@/lib/session.ts';
 export const metadata: Metadata = { title: 'Sell a note' };
 export const dynamic = 'force-dynamic';
 
-const DENOMINATIONS = [10, 20, 50, 100, 200, 500, 2000];
+// Every note the RBI and the Government of India have issued for circulation.
+// The ₹1 is a Government of India note rather than an RBI one, and the ₹1000
+// was demonetised in 2016 -- both are still collected and still listed, which
+// is what this list is for.
+const DENOMINATIONS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];
 
 const ITEM_KINDS = [
   { value: 'coin', label: 'Coin' },

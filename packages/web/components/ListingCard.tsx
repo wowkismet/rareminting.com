@@ -37,6 +37,14 @@ export function ListingCard({
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-sm border border-sand-line bg-sand-raised transition-colors hover:border-accent-deep/60">
       <a href={`/listing/${listing.id}`} className="flex flex-1 flex-col gap-2 p-4">
+        {/* The title leads, above the photograph. A buyer scanning a grid
+            reads what a thing is before deciding whether to look at it, and
+            two lines is enough for any title we allow — longer ones are
+            clipped rather than pushing every card in the row out of line. */}
+        <h3 className="line-clamp-2 font-display text-sm leading-snug text-slate">
+          {listing.title}
+        </h3>
+
         {listing.imageUrl != null ? (
           <img
             src={listing.imageUrl}
@@ -61,10 +69,12 @@ export function ListingCard({
           )}
         </div>
 
-        {note !== undefined ? (
-          // The serial keeps its letter-spacing even at this size: it is a
-          // number people read digit by digit, looking for their own date in
-          // it, and tightening it up is what makes six digits misread as five.
+        {/* The serial keeps its letter-spacing even at this size: it is a
+            number people read digit by digit, looking for their own date in
+            it, and tightening it up is what makes six digits misread as five.
+            Only notes have one — everything else is named by the title above,
+            and repeating that here would just say the same thing twice. */}
+        {note !== undefined && (
           <p className="font-mono text-sm tracking-[0.1em] tabular-nums text-slate">
             {note.prefix !== null && (
               <span className="text-slate-dim">
@@ -74,8 +84,6 @@ export function ListingCard({
             )}
             {note.serialDigits}
           </p>
-        ) : (
-          <p className="font-display text-sm text-slate">{listing.title}</p>
         )}
 
         {listing.match !== undefined && (

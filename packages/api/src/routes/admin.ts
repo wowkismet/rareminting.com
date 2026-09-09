@@ -963,6 +963,181 @@ export function registerAdminRoutes(router: Router): void {
   });
 
   /**
+   * POST /v1/admin/categories — add one to the catalogue.
+   *
+   * The slug is what ends up in a URL, so it is generated from the name rather
+   * than typed: staff naming a category "Gandhi 100s (new)" should not have to
+   * think about what that looks like in a link, and should not be able to
+   * create two that differ only by punctuation.
+   */
+  router.add('POST', '/v1/admin/categories', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const fields = asObject(await ctx.body());
+
+    const name = requiredString(fields, 'name', 80).trim();
+    if (name.length < 2) {
+      throw badRequest('A category needs a name.', { name: 'too_short' });
+    }
+
+    const kind = oneOf(fields, 'kind', ITEM_KINDS);
+
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+    if (slug === '') {
+      throw badRequest('That name has no letters or numbers in it to make a link from.', {
+        name: 'unusable',
+      });
+    }
+
+    const clash = one(
+      await ctx.db.query<{ id: string }>(`select id from categories where slug = $1`, [slug]),
+    );
+    if (clash !== null) {
+      throw conflict(`A category with the link name “${slug}” already exists.`);
+    }
+
+    // A parent must exist and must be of the same kind, or the tree stops
+    // meaning anything: "Silver coins" under "Rare notes" is not a category,
+    // it is a mistake nobody notices until a buyer follows it.
+    const parentId = optionalString(fields, 'parentId', 36);
+    if (parentId !== null && parentId !== '') {
+      const parent = one(
+        await ctx.db.query<{ kind: string }>(`select kind from categories where id = $1`, [
+          parentId,
+        ]),
+      );
+      if (parent === null) throw badRequest('No such parent category.', { parentId: 'unknown' });
+      if (parent.kind !== kind) {
+        throw badRequest('A category must sit under a parent of the same kind.', {
+          parentId: 'wrong_kind',
+        });
+      }
+    }
+
+    const sortRaw = fields['sortOrder'];
+    const sortOrder = Number.isInteger(sortRaw) ? (sortRaw as number) : 0;
+
+    const inserted = await ctx.db.query<{
+      id: string;
+      slug: string;
+      name: string;
+      kind: string;
+      sort_order: number;
+      description: string | null;
+    }>(
+      `insert into categories (slug, name, kind, parent_id, sort_order, description)
+       values ($1, $2, $3::item_kind, $4, $5, $6)
+       returning id, slug, name, kind, sort_order, description`,
+      [
+        slug,
+        name,
+        kind,
+        parentId === null || parentId === '' ? null : parentId,
+        sortOrder,
+        optionalString(fields, 'description', 500),
+      ],
+    );
+
+    const row = inserted.rows[0]!;
+    await audit(ctx, actorId, 'category.create', 'category', row.id, null, row);
+
+    return json({ category: { ...row, sortOrder: row.sort_order, parent: null } }, 201);
+  });
+
+  /** PATCH /v1/admin/categories/:id — rename one, or move it in the order. */
+  router.add('PATCH', '/v1/admin/categories/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+    const fields = asObject(await ctx.body());
+
+    const before = one(
+      await ctx.db.query<{ id: string; name: string; sort_order: number }>(
+        `select id, name, sort_order from categories where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such category.');
+
+    const patch: Record<string, unknown> = {};
+    if ('name' in fields) {
+      const name = requiredString(fields, 'name', 80).trim();
+      if (name.length < 2) throw badRequest('A category needs a name.', { name: 'too_short' });
+      patch['name'] = name;
+    }
+    if ('description' in fields) {
+      patch['description'] = optionalString(fields, 'description', 500);
+    }
+    if (Number.isInteger(fields['sortOrder'])) {
+      patch['sort_order'] = fields['sortOrder'];
+    }
+
+    // The slug is deliberately not editable. It is in links people have
+    // already followed and bookmarked, and silently changing it breaks them.
+    if (Object.keys(patch).length === 0) throw badRequest('Nothing to change.', { body: 'empty' });
+
+    const sets = Object.keys(patch).map((k, i) => `${k} = $${i + 2}`);
+    const updated = await ctx.db.query<{ id: string; name: string; sort_order: number }>(
+      `update categories set ${sets.join(', ')} where id = $1
+       returning id, name, sort_order`,
+      [id, ...Object.values(patch)],
+    );
+
+    await audit(ctx, actorId, 'category.edit', 'category', id, before, patch);
+    return json({ category: updated.rows[0]! });
+  });
+
+  /**
+   * DELETE /v1/admin/categories/:id — remove an empty one.
+   *
+   * Refused while anything still points at it. `parent_id` is `set null` at
+   * the database level, so deleting a parent would quietly orphan its children
+   * into the top level rather than failing — checking here is what makes that
+   * visible instead of surprising.
+   */
+  router.add('DELETE', '/v1/admin/categories/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+
+    const before = one(
+      await ctx.db.query<{ id: string; name: string; slug: string }>(
+        `select id, name, slug from categories where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such category.');
+
+    const children = one(
+      await ctx.db.query<{ n: string }>(
+        `select count(*)::text as n from categories where parent_id = $1`,
+        [id],
+      ),
+    );
+    if (Number(children?.n ?? '0') > 0) {
+      throw conflict('Move or remove the categories underneath this one first.');
+    }
+
+    const inUse = one(
+      await ctx.db.query<{ n: string }>(
+        `select count(*)::text as n from listings where category_id = $1`,
+        [id],
+      ),
+    );
+    if (Number(inUse?.n ?? '0') > 0) {
+      throw conflict(
+        `${inUse?.n} listing${inUse?.n === '1' ? ' is' : 's are'} still in this category.`,
+      );
+    }
+
+    await ctx.db.query(`delete from categories where id = $1`, [id]);
+    await audit(ctx, actorId, 'category.delete', 'category', id, before, null);
+
+    return json({ removed: id });
+  });
+
+  /**
    * GET /v1/admin/reports/:report.csv — a report, downloadable.
    *
    * Money is reported in rupees with the paise as a separate column rather

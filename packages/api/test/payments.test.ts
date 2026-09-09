@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { approveSeller, createRig, request, reset, sellerBody, TEST_IP } from './helpers.ts';
+import { approveSeller, createRig, request, addAddress, reset, sellerBody, TEST_IP } from './helpers.ts';
 import type { App } from '../src/app.ts';
 import {
   checkoutSignatureValid,
@@ -82,6 +82,7 @@ async function orderFor(priceInr = 4500): Promise<{ buyer: string; orderId: stri
   await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token: seller });
 
   const buyer = await signUp();
+  await addAddress(app, buyer);
   const ordered = await request(app, 'POST', `/v1/listings/${listing.id}/order`, { token: buyer });
   assert.equal(ordered.status, 201, await ordered.clone().text());
   const { order } = (await ordered.json()) as { order: { id: string } };

@@ -5,6 +5,7 @@ import { currentUser } from '@/lib/session.ts';
 
 import { SiteFooter } from './SiteFooter.tsx';
 import { SiteHeader } from './SiteHeader.tsx';
+import { BuyerFrame } from './BuyerFrame.tsx';
 
 /**
  * Shared shell for the policy pages, so they read as one document set rather
@@ -42,19 +43,8 @@ export async function PolicyPage({
 }) {
   const user = await currentUser();
 
-  return (
-    <div>
-      <SiteHeader user={user} compact />
-
-      <div className="guilloche bg-primary">
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-2 px-5 py-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent-bright">
-            {eyebrow}
-          </p>
-        </div>
-      </div>
-
-      <main className="mx-auto flex max-w-3xl flex-col gap-10 px-5 py-14 text-[0.95rem] leading-relaxed text-slate">
+  const body = (
+    <>
         <div className="flex flex-col gap-3">
           <h1 className="font-display text-3xl text-slate sm:text-4xl">{title}</h1>
           <p className="text-sm text-slate-dim">Last updated {POLICY_LAST_UPDATED}.</p>
@@ -81,6 +71,37 @@ export async function PolicyPage({
             ))}
           </ul>
         </nav>
+    </>
+  );
+
+  // Signed in, the policy keeps the customer's own furniture around it.
+  // Contact and Refunds are both on the buyer's side menu, and following
+  // either used to drop the menu and strand them on the public site with no
+  // way back but the browser's back button.
+  if (user !== null) {
+    return (
+      <BuyerFrame current={current ?? ''} eyebrow={eyebrow} title={title}>
+        <div className="flex max-w-3xl flex-col gap-10 text-[0.95rem] leading-relaxed text-slate">
+          {body}
+        </div>
+      </BuyerFrame>
+    );
+  }
+
+  return (
+    <div>
+      <SiteHeader user={null} compact />
+
+      <div className="guilloche bg-primary">
+        <div className="mx-auto flex max-w-3xl flex-col items-center gap-2 px-5 py-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-accent-bright">
+            {eyebrow}
+          </p>
+        </div>
+      </div>
+
+      <main className="mx-auto flex max-w-3xl flex-col gap-10 px-5 py-14 text-[0.95rem] leading-relaxed text-slate">
+        {body}
       </main>
 
       <SiteFooter />

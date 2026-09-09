@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
 
-import { SiteHeader } from '@/components/SiteHeader.tsx';
-import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { BuyerFrame } from '@/components/BuyerFrame.tsx';
 import { api } from '@/lib/api.ts';
-import { currentUser } from '@/lib/session.ts';
 
 export const metadata: Metadata = {
   title: 'Auctions',
@@ -51,21 +49,14 @@ function timeLeft(endsAt: string): string {
 }
 
 export default async function AuctionsPage() {
-  const user = await currentUser();
   const result = await api<{ auctions: AuctionSummary[] }>('/v1/auctions');
   const auctions = result.ok ? result.data.auctions : [];
 
   return (
-    <div>
-      <SiteHeader user={user} compact />
-
-      <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-14">
+    <BuyerFrame current="/auctions" eyebrow="The Rostrum" title="Auctions">
+      <div className="flex flex-col gap-10">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-            The Rostrum
-          </p>
-          <h1 className="mt-2 font-display text-3xl text-slate sm:text-4xl">Auctions</h1>
-          <p className="mt-3 max-w-2xl text-slate-dim">
+          <p className="max-w-2xl text-slate-dim">
             Timed auctions with proxy bidding: state the most you are willing to pay and we bid on
             your behalf only as far as we must. You usually pay less than your maximum.
           </p>
@@ -175,9 +166,7 @@ export default async function AuctionsPage() {
             </li>
           </ul>
         </div>
-      </main>
-
-      <SiteFooter />
-    </div>
+      </div>
+    </BuyerFrame>
   );
 }

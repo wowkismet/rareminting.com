@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
 
 import { BannerSlot } from '@/components/BannerSlot.tsx';
-import { SiteHeader } from '@/components/SiteHeader.tsx';
-import { SiteFooter } from '@/components/SiteFooter.tsx';
+import { BrowseFilters } from '@/components/BrowseFilters.tsx';
+import { BuyerFrame } from '@/components/BuyerFrame.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
-import { currentUser } from '@/lib/session.ts';
 
 export const metadata: Metadata = {
   title: 'Browse notes',
@@ -35,14 +34,29 @@ const COLLECTION_LABEL: Record<string, string> = {
 export default async function BrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; pattern?: string; kind?: string; q?: string }>;
+  searchParams: Promise<{
+    date?: string;
+    pattern?: string;
+    kind?: string;
+    q?: string;
+    price?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const user = await currentUser();
   const date = params.date;
   const pattern = params.pattern;
   const kind = params.kind?.trim() ?? '';
   const q = params.q?.trim() ?? '';
+
+  // One field on the wire, two bounds underneath: "2000-10000", or one side
+  // left empty for an open end. Anything that is not a pair of digits is
+  // treated as no filter at all rather than as an error — it can only get here
+  // by being typed into the URL by hand.
+  const [minPrice, maxPrice] = (() => {
+    const raw = params.price ?? '';
+    const m = /^(\d*)-(\d*)$/.exec(raw);
+    return m === null ? ['', ''] : [m[1] ?? '', m[2] ?? ''];
+  })();
 
   // A date search has its own shape — exact matches and near ones — so it
   // takes precedence. Everything else composes: a kind and a search term can
@@ -57,6 +71,8 @@ export default async function BrowsePage({
     }
     if (/^[a-z_]{1,24}$/.test(kind)) search.set('kind', kind);
     if (q !== '') search.set('q', q.slice(0, 80));
+    if (minPrice !== '') search.set('minPrice', minPrice);
+    if (maxPrice !== '') search.set('maxPrice', maxPrice);
     path = `/v1/listings?${search.toString()}`;
   }
 
@@ -94,21 +110,27 @@ export default async function BrowsePage({
         : (collectionLabel ?? KIND_LABEL[kind] ?? 'Notes for sale');
 
   return (
-    <div>
-      <SiteHeader user={user} compact />
-
-      <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-14">
+    <BuyerFrame current="/browse" eyebrow="The Floor" title={heading}>
+      <div className="flex flex-col gap-8">
         <BannerSlot slot="browse" />
 
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-deep">
-            The Floor
-          </p>
-          <h1 className="mt-2 font-display text-3xl text-slate sm:text-4xl">
-            {heading}
-          </h1>
-        </div>
+        {/* Three columns on a wide screen: filters, the floor, promotions.
+            The rails collapse away below `lg` rather than stacking a filter
+            panel and an advert on top of the grid — on a phone the listings
+            are what the buyer came for, and the filters open from the top. */}
+        <div className="flex flex-col gap-8 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_15rem] lg:items-start">
+          <aside className="lg:sticky lg:top-6">
+            <BrowseFilters
+              kind={kind}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              date={date}
+              pattern={pattern}
+              q={q}
+            />
+          </aside>
 
+          <div className="flex min-w-0 flex-col gap-8">
         <form method="GET" className="flex flex-wrap items-center gap-3">
           <label htmlFor="date" className="sr-only">
             Find a date
@@ -166,10 +188,17 @@ export default async function BrowsePage({
             )}
           </>
         )}
-      </main>
+          </div>
 
-      <SiteFooter />
-    </div>
+          {/* The promotional rail. Whatever an admin has put in the slot, and
+              nothing at all when the slot is empty — an advertising column
+              holding a placeholder is worse than one that is not there. */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <BannerSlot slot="browse_side" />
+          </aside>
+        </div>
+      </div>
+    </BuyerFrame>
   );
 }
 

@@ -15,6 +15,7 @@ export default function ContactPage() {
 
   return (
     <PolicyPage
+      current="/contact"
       eyebrow="Contact"
       title="Contact &amp; grievances"
       intro={

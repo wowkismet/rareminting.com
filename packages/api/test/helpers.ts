@@ -72,7 +72,7 @@ export async function reset(pg: PGlite): Promise<void> {
   await pg.exec(`
     truncate login_attempts, sessions, user_roles, audit_logs,
              date_matches, listing_pattern_tags, notes, listings,
-             order_items, orders, order_groups,
+             order_items, orders, order_groups, addresses,
              kyc_documents, otp_challenges, sellers
       restart identity cascade;
     delete from users;
@@ -164,4 +164,31 @@ export function request(
     }),
     TEST_IP,
   );
+}
+
+/**
+ * Give a buyer somewhere for the parcel to go.
+ *
+ * Buying requires a delivery address — a checkout that takes money without
+ * one leaves support chasing the buyer afterwards — so any test that places
+ * an order needs this first. It returns the id for the checkout body; the
+ * single-listing buy route finds it on its own from the default.
+ */
+export async function addAddress(app: App, token: string): Promise<string> {
+  const res = await request(app, 'POST', '/v1/addresses', {
+    token,
+    body: {
+      recipientName: 'Test Buyer',
+      line1: '12 Marine Drive',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      postalCode: '400020',
+      phone: '9876543210',
+    },
+  });
+  const body = (await res.json()) as { address?: { id: string } };
+  if (body.address === undefined) {
+    throw new Error(`could not add a test address: ${JSON.stringify(body)}`);
+  }
+  return body.address.id;
 }

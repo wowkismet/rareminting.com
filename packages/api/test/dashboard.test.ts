@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { approveSeller, createRig, request, reset, sellerBody } from './helpers.ts';
+import { addAddress, approveSeller, createRig, request, reset, sellerBody } from './helpers.ts';
 import type { App } from '../src/app.ts';
 
 /**
@@ -37,7 +37,10 @@ async function signUp(): Promise<string> {
   const res = await request(app, 'POST', '/v1/auth/register', {
     body: { email: `dash${accounts}@example.com`, password: 'correct horse battery' },
   });
-  return ((await res.json()) as { token: string }).token;
+  const token = ((await res.json()) as { token: string }).token;
+  // Buying needs a delivery address, so every account here has one.
+  await addAddress(app, token);
+  return token;
 }
 
 async function approvedSeller(token: string): Promise<string> {

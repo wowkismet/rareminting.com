@@ -633,3 +633,49 @@ describe('browsing by pattern', () => {
     assert.equal(res.status, 400);
   });
 });
+
+describe('filtering the floor by price', () => {
+  it('narrows to a band, and counts what it narrowed to', async () => {
+    const seller = await signUp('price-filter@example.com');
+    await approvedSeller(seller);
+    for (const [serial, priceInr] of [
+      ['9AB 410001', 900],
+      ['9AB 410002', 5000],
+      ['9AB 410003', 90000],
+    ] as const) {
+      const made = await request(app, 'POST', '/v1/listings', {
+        token: seller,
+        body: { serial, denomination: 100, series: 'Mahatma Gandhi New Series', priceInr },
+      });
+      const { listing } = (await made.json()) as { listing: { id: string } };
+      await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token: seller });
+    }
+
+    const band = async (query: string): Promise<{ total: number; prices: number[] }> => {
+      const res = await request(app, 'GET', `/v1/listings?${query}`);
+      const body = (await res.json()) as {
+        total: number;
+        listings: { priceInr: number | null }[];
+      };
+      return { total: body.total, prices: body.listings.map((l) => l.priceInr ?? 0) };
+    };
+
+    const under = await band('maxPrice=2000');
+    assert.deepEqual(under.prices, [900]);
+    // The count is of everything matching, not of this page — a total that
+    // ignores the filter contradicts the list printed under it.
+    assert.equal(under.total, 1);
+
+    const middle = await band('minPrice=2000&maxPrice=10000');
+    assert.deepEqual(middle.prices, [5000]);
+    assert.equal(middle.total, 1);
+
+    const over = await band('minPrice=50000');
+    assert.deepEqual(over.prices, [90000]);
+
+    // A half-typed or nonsensical bound is no filter, not an error: it comes
+    // from a box on the browse page.
+    const junk = await band('minPrice=&maxPrice=abc');
+    assert.equal(junk.total, 3);
+  });
+});

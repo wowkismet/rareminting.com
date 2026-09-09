@@ -25,7 +25,14 @@ import { one, type Database } from '../db.ts';
 const UPLOAD_DIR = process.env['UPLOAD_DIR'] ?? '/srv/rareminting/uploads';
 const MAX_BYTES = 4 * 1024 * 1024;
 
-const SLOTS = ['home_hero', 'home_mid', 'listing_page', 'cart', 'browse'] as const;
+const SLOTS = [
+  'home_hero',
+  'home_mid',
+  'listing_page',
+  'cart',
+  'browse',
+  'browse_side',
+] as const;
 type Slot = (typeof SLOTS)[number];
 
 function detect(bytes: Uint8Array): { extension: string } | null {

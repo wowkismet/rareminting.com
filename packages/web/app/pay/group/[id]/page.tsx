@@ -23,6 +23,16 @@ interface Group {
     discountInr: number;
     totalInr: number;
     placedAt: string | null;
+    /** Null on groups placed before an address was asked for. */
+    billTo: {
+      name: string;
+      line1: string | null;
+      line2: string | null;
+      city: string | null;
+      state: string | null;
+      postalCode: string | null;
+      phone: string | null;
+    } | null;
   };
   orders: {
     id: string;
@@ -76,6 +86,43 @@ export default async function PayGroupPage({ params }: { params: Promise<{ id: s
       current="/cart"
     >
       <div className="flex max-w-3xl flex-col gap-6">
+        {/* Who the bill is made out to and where the parcel goes — the same
+            name and address, as the buyer gave them. Shown before the total
+            rather than after it, because this is the last point at which a
+            wrong PIN code is free to fix. */}
+        {group.billTo !== null && (
+          <div className="rounded-sm border border-sand-line bg-sand-raised p-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">
+              Billed and delivered to
+            </p>
+            <address className="mt-3 text-sm not-italic leading-relaxed text-slate">
+              <span className="block font-medium">{group.billTo.name}</span>
+              <span className="block text-slate-dim">
+                {group.billTo.line1}
+                {group.billTo.line2 !== null && group.billTo.line2 !== '' && (
+                  <>, {group.billTo.line2}</>
+                )}
+                <br />
+                {group.billTo.city}, {group.billTo.state} {group.billTo.postalCode}
+                {group.billTo.phone !== null && (
+                  <>
+                    <br />
+                    {group.billTo.phone}
+                  </>
+                )}
+              </span>
+            </address>
+            <p className="mt-3 text-xs leading-relaxed text-slate-dim">
+              The bill for this order is issued in this name and to this address only. Change it
+              from{' '}
+              <a href="/cart" className="text-accent-deep underline underline-offset-4">
+                your cart
+              </a>{' '}
+              before paying — once payment is taken, the invoice is fixed as it stands here.
+            </p>
+          </div>
+        )}
+
         {orders.map((o) => (
           <Panel key={o.id} title={o.seller}>
             <ul className="flex flex-col gap-2">

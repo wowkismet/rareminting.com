@@ -2,7 +2,7 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { approveSeller, createRig, request, reset, sellerBody } from './helpers.ts';
+import { approveSeller, createRig, request, addAddress, reset, sellerBody } from './helpers.ts';
 import type { App } from '../src/app.ts';
 import {
   decryptAccountNumber,
@@ -92,6 +92,7 @@ async function paidOrder(priceInr = 5000): Promise<{
   await request(app, 'POST', `/v1/listings/${listing.id}/publish`, { token: sellerToken });
 
   const buyer = await signUp();
+  await addAddress(app, buyer);
   const ordered = await request(app, 'POST', `/v1/listings/${listing.id}/order`, { token: buyer });
   const { order } = (await ordered.json()) as { order: { id: string } };
 

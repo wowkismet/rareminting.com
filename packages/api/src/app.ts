@@ -26,6 +26,7 @@ import { registerSupportRoutes } from './routes/support.ts';
 import { registerKycDocumentRoutes } from './routes/kyc-documents.ts';
 import { registerBannerRoutes } from './routes/banners.ts';
 import { registerCouponRoutes } from './routes/coupons.ts';
+import { registerAddressRoutes } from './routes/addresses.ts';
 
 export interface App {
   handle(req: Request, socketIp?: string | null): Promise<Response>;
@@ -53,6 +54,7 @@ export function createApp(db: Database): App {
   registerKycDocumentRoutes(router, db);
   registerBannerRoutes(router, db);
   registerCouponRoutes(router, db);
+  registerAddressRoutes(router, db);
 
   return {
     async handle(req, socketIp = null): Promise<Response> {

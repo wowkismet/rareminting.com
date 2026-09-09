@@ -7,8 +7,13 @@
   "engines": {
     "node": ">=24.0.0"
   },
+  "//workspaces": "packages/mobile is deliberately absent. It is React Native, built by EAS in the cloud rather than by deploy.sh, and listing it here forces the production server to install the whole Expo toolchain it will never run — which is what broke the deploy on 9 September. It installs on its own: npm install --prefix packages/mobile",
   "workspaces": [
-    "packages/*"
+    "packages/api",
+    "packages/config",
+    "packages/db",
+    "packages/serial-engine",
+    "packages/web"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",

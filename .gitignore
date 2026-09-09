@@ -22,3 +22,6 @@ npm-debug.log*
 
 # Machine-specific: contains an absolute path to a local Node install
 .claude/launch.json
+
+# Packaged mobile source, rebuilt on demand rather than committed.
+rareminting-mobile.zip

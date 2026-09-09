@@ -196,6 +196,8 @@ export default async function ListingPage({
           dates={listing.dates}
           patterns={listing.patterns?.map((p) => p.code)}
           sellerName={listing.sellerName}
+          kind={listing.kind}
+          collectible={listing.collectible}
         />
 
         {listing.patterns !== undefined && listing.patterns.length > 0 && (

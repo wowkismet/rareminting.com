@@ -49,6 +49,29 @@ interface Note {
   serialDigits: string;
 }
 
+/** Reads naturally after "is listed as". Matches the item_kind enum. */
+const KIND_PHRASE: Record<string, string> = {
+  banknote: 'a banknote',
+  coin: 'a coin',
+  stamp: 'a stamp',
+  bond: 'a bond certificate',
+  share_certificate: 'a share certificate',
+  ephemera: 'a piece of ephemera',
+  jewellery: 'a piece of jewellery',
+  precious_stone: 'a precious stone',
+  antique: 'an antique',
+  other: 'a collectible',
+};
+
+interface Collectible {
+  denomination: number | null;
+  yearOfIssue: number | null;
+  mintMark: string | null;
+  metal: string | null;
+  weightGrams: number | null;
+  catalogueRef: string | null;
+}
+
 interface DateReading {
   iso: string | null;
   day: number;
@@ -65,6 +88,8 @@ export function NoteDetail({
   dates,
   patterns,
   sellerName,
+  kind,
+  collectible,
 }: {
   title: string;
   description: string | null | undefined;
@@ -73,11 +98,29 @@ export function NoteDetail({
   dates: readonly DateReading[] | undefined;
   patterns: readonly string[] | undefined;
   sellerName?: string | undefined;
+  kind?: string | undefined;
+  collectible?: Collectible | undefined;
 }) {
   const full = (dates ?? []).filter((d) => !d.isPartial && d.iso !== null);
   const named = (patterns ?? [])
     .map((p) => PATTERN_MEANING[p])
     .filter((p): p is string => p !== undefined);
+
+  // Only what the seller actually filled in. An empty field is left out
+  // rather than written up as "unknown", which reads as padding.
+  const facts: [string, string][] = (
+    [
+      ['Year of issue', collectible?.yearOfIssue?.toString() ?? null],
+      ['Metal', collectible?.metal ?? null],
+      ['Mint mark', collectible?.mintMark ?? null],
+      ['Weight', collectible?.weightGrams == null ? null : `${collectible.weightGrams} g`],
+      ['Catalogue reference', collectible?.catalogueRef ?? null],
+      [
+        'Face value',
+        collectible?.denomination == null ? null : `₹${collectible.denomination}`,
+      ],
+    ] as [string, string | null][]
+  ).filter((entry): entry is [string, string] => entry[1] !== null && entry[1] !== '');
 
   const written = description != null && description.trim() !== '' ? description.trim() : null;
 
@@ -183,15 +226,38 @@ export function NoteDetail({
       ) : (
         <div className="flex flex-col gap-3 text-[0.95rem] leading-relaxed text-slate">
           <p>
-            {title} is listed by its seller as being in{' '}
-            <strong className="font-normal text-slate">{grade ?? 'unstated'}</strong> condition. The
-            photographs above are of this item rather than a stock picture of the type, and are the
-            evidence a buyer is asked to judge it on.
+            {title} is listed as {KIND_PHRASE[kind ?? ''] ?? 'a collectible'} in{' '}
+            <strong className="font-normal text-slate">{grade ?? 'unstated'}</strong> condition
+            {grade !== null && GRADE_MEANING[grade] !== undefined && (
+              <> — {GRADE_MEANING[grade]}</>
+            )}
+            . The condition is the seller&rsquo;s own assessment rather than a certification by us,
+            and the photographs above are the evidence: they are of this piece, not a stock image of
+            the type. Look at them closely, and ask before buying if anything in them is unclear —
+            questions before a sale are easier for everyone than a claim after one.
           </p>
+
+          {facts.length > 0 && (
+            <p>
+              What the seller has recorded about it:{' '}
+              {facts.map(([label, value], i) => (
+                <span key={label}>
+                  {i > 0 && (i === facts.length - 1 ? ' and ' : ', ')}
+                  {label.toLowerCase()} {value}
+                </span>
+              ))}
+              . Those details are how a piece like this is identified and compared against others of
+              its kind, and they are worth checking against any reference you trust before you
+              commit to it.
+            </p>
+          )}
+
           <p>
-            Payment is held until it reaches you and the inspection window closes, so the seller is
-            paid after delivery rather than before. If what arrives is not what was described, that
-            is a claim rather than an argument.
+            Every item on Rare Minting is sold by an individual seller who has been through identity
+            checks before being allowed to list. Payment for this piece is held until it reaches you
+            and the inspection window closes, so the seller is paid after delivery rather than
+            before. If what arrives is not what was described here, or its condition is materially
+            worse than stated, that is a claim rather than an argument.
           </p>
         </div>
       )}

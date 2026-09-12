@@ -60,9 +60,12 @@ export const COMPANY: Company = {
     // A mailbox that works today. rareminting.com has no MX records yet, so
     // an address on our own domain would bounce — and a grievance channel
     // nobody can reach is worse than an unbranded one that works.
-    email: 'rareminting@gmail.com',
+    email: 'raremintings@gmail.com',
   },
-  supportEmail: null,
+  // The same mailbox. Until now this was null and the contact page said a
+  // support address was "being set up", which was true but left a visitor
+  // with no way to write in at all.
+  supportEmail: 'raremintings@gmail.com',
 };
 
 /** Single-line address, for a footer or an invoice header. */

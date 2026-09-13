@@ -183,7 +183,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       for (const row of cart.rows) {
         const taken = await tx.query<{ id: string }>(
           `update listings set state = 'reserved'
-            where id = $1 and state = 'minted'
+            where id = $1 and state = 'minted' and deleted_at is null
             returning id`,
           [row.listing_id],
         );

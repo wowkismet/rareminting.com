@@ -1,6 +1,12 @@
 import type { Metadata } from 'next';
 
-import { adminUploadPhoto, editListing, moderateListing } from '@/app/actions.ts';
+import {
+  adminUploadPhoto,
+  deleteListing,
+  editListing,
+  moderateListing,
+  restoreListing,
+} from '@/app/actions.ts';
 
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 import { DashboardShell } from '@/components/DashboardShell.tsx';
@@ -18,6 +24,7 @@ interface AdminListing {
   id: string;
   title: string;
   description: string | null;
+  deletedAt: string | null;
   state: string;
   priceInr: number | null;
   grade: string | null;
@@ -30,9 +37,10 @@ interface AdminListing {
 /**
  * The moderation list.
  *
- * Withdrawing is the only action here, and it is deliberately one-way from
- * this page: putting something back on the market is the seller's decision to
- * make, not staff's.
+ * Staff can withdraw a listing, delete it, or put a deleted one back. Delete
+ * is a timestamp rather than a removal -- orders reference the row, and a
+ * marketplace has to be able to say years later what was sold and how it was
+ * described -- which is what makes restoring it possible at all.
  */
 export default async function AdminProductsPage({
   searchParams,
@@ -172,7 +180,7 @@ export default async function AdminProductsPage({
                                 the same screen the seller uses. This inline form
                                 stays for the common one-field correction. */}
                             <a
-                              href={`/listing//edit`}
+                              href={`/listing/${l.id}/edit`}
                               className="mt-2 block rounded-full border border-accent-deep px-3 py-1 text-center text-xs text-accent-deep transition-colors hover:bg-accent-deep hover:text-cream"
                             >
                               Full editor
@@ -297,6 +305,31 @@ export default async function AdminProductsPage({
                                 className="w-full rounded-full border border-sand-line px-3 py-1 text-xs text-slate-dim transition-colors hover:border-ember hover:text-ember"
                               >
                                 Withdraw
+                              </button>
+                            </form>
+                          )}
+
+                          {/* Deleting is reversible: orders reference the row,
+                              so it is hidden rather than destroyed and staff
+                              can put it back. */}
+                          {l.deletedAt === null ? (
+                            <form action={deleteListing}>
+                              <input type="hidden" name="listingId" value={l.id} />
+                              <button
+                                type="submit"
+                                className="w-full rounded-full border border-ember/50 px-3 py-1 text-xs text-ember transition-colors hover:bg-ember hover:text-cream"
+                              >
+                                Delete
+                              </button>
+                            </form>
+                          ) : (
+                            <form action={restoreListing}>
+                              <input type="hidden" name="listingId" value={l.id} />
+                              <button
+                                type="submit"
+                                className="w-full rounded-full border border-accent-deep px-3 py-1 text-xs text-accent-deep transition-colors hover:bg-accent-deep hover:text-cream"
+                              >
+                                Restore
                               </button>
                             </form>
                           )}

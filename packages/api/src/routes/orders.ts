@@ -79,7 +79,7 @@ async function saleable(ctx: Ctx, listingId: string): Promise<SaleableListing | 
             l.price_paise::text as price_paise, l.state, l.title
        from listings l
        join sellers s on s.id = l.seller_id
-      where l.id = $1`,
+      where l.id = $1 and l.deleted_at is null`,
     [listingId],
   );
   return one(result);
@@ -136,7 +136,7 @@ export function registerOrderRoutes(router: Router, database: Database): void {
       // there first this matches nothing, and the throw rolls the order back.
       const reserved = await tx.query<{ id: string }>(
         `update listings set state = 'reserved'
-          where id = $1 and state = 'minted'
+          where id = $1 and state = 'minted' and deleted_at is null
           returning id`,
         [listingId],
       );

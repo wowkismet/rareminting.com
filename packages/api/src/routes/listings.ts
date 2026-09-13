@@ -13,7 +13,7 @@ import type { DateInterpretation, PatternTag } from '@rareminting/serial-engine'
 
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
-import { badRequest, conflict, forbidden, notFound } from '../errors.ts';
+import { badRequest, conflict, forbidden, notFound, unauthorized } from '../errors.ts';
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { PG_UNIQUE_VIOLATION, one, pgConstraint, pgErrorCode, type Database } from '../db.ts';
 import { requireApprovedSeller, requireSeller } from './sellers.ts';
@@ -512,6 +512,10 @@ export function registerListingRoutes(router: Router, database: Database): void 
    * has to survive for the audit trail to mean anything.
    */
   router.add('POST', '/v1/listings/:id/sale-mode', async (ctx) => {
+    // Who before what. Validating the body first told an anonymous caller
+    // what the route wanted before deciding they had no business calling it.
+    if (ctx.session === null) throw unauthorized();
+
     const id = ctx.params['id'] ?? '';
     const fields = asObject(await ctx.body());
     const mode = oneOf(fields, 'saleMode', ['fixed', 'auction'] as const);
@@ -714,7 +718,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
                   where m.listing_id = l.id order by m.sort_order asc limit 1) as thumb
            from listings l
            left join notes n on n.listing_id = l.id
-          where l.state = 'minted'
+          where l.state = 'minted' and l.deleted_at is null
             and ($2::text[] is null or exists (
                   select 1 from listing_pattern_tags lt
                    where lt.listing_id = l.id and lt.tag_code = any($2::text[])))
@@ -737,7 +741,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
         `select count(*)::text as total
            from listings l
            left join notes n on n.listing_id = l.id
-          where l.state = 'minted'
+          where l.state = 'minted' and l.deleted_at is null
             and ($1::text[] is null or exists (
                   select 1 from listing_pattern_tags lt
                    where lt.listing_id = l.id and lt.tag_code = any($1::text[])))
@@ -783,7 +787,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
               (d.matched_date = $1::date) as exact
          from date_matches d
          join listings l on l.id = d.listing_id
-        where l.state = 'minted'
+        where l.state = 'minted' and l.deleted_at is null
           and d.month = extract(month from $1::date)
           and d.day   = extract(day   from $1::date)
         order by (d.matched_date = $1::date) desc, d.confidence desc
@@ -823,7 +827,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
               s.display_name as seller_name
          from listings l
          join sellers s on s.id = l.seller_id
-        where l.id = $1`,
+        where l.id = $1 and l.deleted_at is null`,
       [id],
     );
     const listing = one(listingResult);

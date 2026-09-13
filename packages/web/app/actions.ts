@@ -1224,3 +1224,35 @@ export async function moveSavedToCart(data: FormData): Promise<void> {
   revalidatePath('/saved');
   revalidatePath('/cart');
 }
+
+/**
+ * Delete a listing, as staff.
+ *
+ * Reversible by design — the API sets a timestamp rather than removing the
+ * row, because orders reference it and a marketplace has to be able to say
+ * years later what was sold and how it was described.
+ */
+export async function deleteListing(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  await api(`/v1/admin/listings/${listingId}`, { method: 'DELETE', token });
+  revalidatePath('/admin/products');
+  revalidatePath(`/listing/${listingId}`);
+}
+
+/** Put a deleted listing back, in the state it left in. */
+export async function restoreListing(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  await api(`/v1/admin/listings/${listingId}/restore`, { method: 'POST', token });
+  revalidatePath('/admin/products');
+  revalidatePath(`/listing/${listingId}`);
+}

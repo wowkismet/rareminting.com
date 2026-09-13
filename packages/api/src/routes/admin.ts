@@ -522,10 +522,11 @@ export function registerAdminRoutes(router: Router): void {
       seller_name: string;
       serial_digits: string | null;
       created_at: string;
+      deleted_at: string | null;
     }>(
       `select l.id, l.title, l.description, l.state, l.price_paise::text as price_paise, l.grade,
               l.seller_id, s.display_name as seller_name, n.serial_digits,
-              l.created_at::text as created_at
+              l.created_at::text as created_at, l.deleted_at::text as deleted_at
          from listings l
          join sellers s on s.id = l.seller_id
          left join notes n on n.listing_id = l.id
@@ -548,6 +549,7 @@ export function registerAdminRoutes(router: Router): void {
         sellerName: r.seller_name,
         serialDigits: r.serial_digits,
         createdAt: r.created_at,
+        deletedAt: r.deleted_at,
       })),
     });
   });
@@ -620,6 +622,73 @@ export function registerAdminRoutes(router: Router): void {
         state: row.state,
       },
     });
+  });
+
+  /**
+   * DELETE /v1/admin/listings/:id — remove a listing from the marketplace.
+   *
+   * A timestamp, not a `delete from`. Orders, order items, date matches,
+   * pattern tags, media and auctions all reference this row, so removing it
+   * would take somebody's purchase history with it — and a collectibles
+   * marketplace has to be able to say, years later, what was sold and how it
+   * was described at the time.
+   *
+   * Refused outright while a buyer has money against it. Deleting a listing
+   * somebody is part-way through paying for is not a moderation decision, it
+   * is a bug waiting to be reported.
+   */
+  router.add('DELETE', '/v1/admin/listings/:id', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+
+    const before = one(
+      await ctx.db.query<{ id: string; state: string; title: string; deleted_at: string | null }>(
+        `select id, state::text as state, title, deleted_at::text as deleted_at
+           from listings where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such listing.');
+    if (before.deleted_at !== null) throw conflict('That listing is already deleted.');
+    if (before.state === 'reserved' || before.state === 'struck') {
+      throw conflict(
+        before.state === 'reserved'
+          ? 'A buyer is part-way through paying for this. It cannot be deleted until that clears.'
+          : 'This has been sold. Its record belongs to an order and cannot be deleted.',
+      );
+    }
+
+    await ctx.db.query(
+      `update listings set deleted_at = now(), deleted_by = $2::uuid, updated_at = now()
+        where id = $1`,
+      [id, actorId],
+    );
+    await audit(ctx, actorId, 'LISTING_DELETED', 'listing', id, before, { deleted: true });
+
+    return json({ deleted: id, restorable: true });
+  });
+
+  /** POST /v1/admin/listings/:id/restore — put a deleted listing back. */
+  router.add('POST', '/v1/admin/listings/:id/restore', async (ctx) => {
+    const actorId = await requireAdmin(ctx);
+    const id = ctx.params['id'] ?? '';
+
+    const restored = await ctx.db.query<{ id: string; state: string }>(
+      `update listings set deleted_at = null, deleted_by = null, updated_at = now()
+        where id = $1 and deleted_at is not null
+        returning id, state::text as state`,
+      [id],
+    );
+    if (restored.rows.length === 0) {
+      throw notFound('No such deleted listing.');
+    }
+
+    await audit(ctx, actorId, 'LISTING_RESTORED', 'listing', id, { deleted: true }, restored.rows[0]!);
+
+    // It comes back in the state it left in, which for a listing that was live
+    // means live again. Staff who wanted it back but not on the floor can
+    // withdraw it from here.
+    return json({ listing: restored.rows[0]! });
   });
 
   /**

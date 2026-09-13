@@ -166,8 +166,17 @@ export default async function AdminProductsPage({
                               this page exists to be. */}
                           <details>
                             <summary className="cursor-pointer list-none rounded-full border border-sand-line px-3 py-1 text-center text-xs text-slate transition-colors hover:border-accent-deep">
-                              Edit
+                              Quick edit
                             </summary>
+                            {/* The full editor -- images, sale type, status -- is
+                                the same screen the seller uses. This inline form
+                                stays for the common one-field correction. */}
+                            <a
+                              href={`/listing//edit`}
+                              className="mt-2 block rounded-full border border-accent-deep px-3 py-1 text-center text-xs text-accent-deep transition-colors hover:bg-accent-deep hover:text-cream"
+                            >
+                              Full editor
+                            </a>
                             <form
                               action={editListing}
                               className="mt-2 flex w-56 flex-col gap-2 rounded-sm border border-sand-line bg-sand p-3"

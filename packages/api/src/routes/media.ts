@@ -170,6 +170,31 @@ export function registerMediaRoutes(router: Router): void {
     return json({ media: await storeUpload(ctx, listingId) }, 201);
   });
 
+  /**
+   * DELETE /v1/listings/:id/media/:mediaId — a seller removing their own.
+   *
+   * The row goes; the file on disk stays, exactly as it does when staff take
+   * one down. A photograph removed after a dispute has started is evidence,
+   * and deleting the only copy of it is how a dispute becomes one person's
+   * word against another's.
+   */
+  router.add('DELETE', '/v1/listings/:id/media/:mediaId', async (ctx) => {
+    if (ctx.session === null) throw unauthorized();
+    const listingId = ctx.params['id'] ?? '';
+
+    if ((await ownedListing(ctx, listingId)) === null) {
+      throw forbidden('This listing belongs to another seller.');
+    }
+
+    const removed = await ctx.db.query<{ id: string }>(
+      `delete from media where id = $1 and listing_id = $2 returning id`,
+      [ctx.params['mediaId'] ?? '', listingId],
+    );
+    if (removed.rows.length === 0) throw notFound('No such photograph.');
+
+    return json({ removed: removed.rows[0]!.id });
+  });
+
   /** GET /v1/listings/:id/media — the photographs for a listing. */
   router.add('GET', '/v1/listings/:id/media', async (ctx) => {
     const listingId = ctx.params['id'] ?? '';

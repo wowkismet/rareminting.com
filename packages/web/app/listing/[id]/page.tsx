@@ -66,7 +66,17 @@ export default async function ListingPage({
           {/* The title leads the page for everyone. A seller viewing their own
               item gets it in the dashboard header too, but repeating it above
               the photographs costs nothing and keeps one layout, not two. */}
-          <h1 className="mt-2 font-display text-3xl text-slate">{listing.title}</h1>
+          <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
+            <h1 className="font-display text-3xl text-slate">{listing.title}</h1>
+            {(isOwner || (user?.roles.includes('admin') ?? false)) && (
+              <a
+                href={`/listing/${listing.id}/edit`}
+                className="rounded-full border border-sand-line px-5 py-2 text-sm text-slate transition-colors hover:border-accent-deep"
+              >
+                Edit listing
+              </a>
+            )}
+          </div>
         </div>
 
         <NotePhotos media={listing.media ?? []} title={listing.title} />

@@ -350,6 +350,133 @@ export async function checkoutCart(data: FormData): Promise<void> {
   redirect(`/pay/group/${result.data.group.id}`);
 }
 
+/* --------------------------- listing editing -------------------------- */
+
+/**
+ * Save the edit listing form.
+ *
+ * Routed by who the user is rather than by which form they submitted: staff
+ * go to the admin route, everyone else to the seller one. Both end up in the
+ * same validator on the API, so the only thing this choice decides is
+ * authority — whether editing somebody else's listing is allowed.
+ *
+ * Empty text fields are sent as empty rather than dropped, because on this
+ * form emptying a box is a deliberate act: it is how a description or a
+ * certificate number is cleared. That is the opposite of the admin quick-edit
+ * on the products table, where a blank means "leave it alone".
+ */
+export async function editListingFull(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  const body: Record<string, unknown> = {
+    title: text(data, 'title'),
+    description: text(data, 'description'),
+    grade: text(data, 'grade'),
+    state: text(data, 'state'),
+    certificationBody: text(data, 'certificationBody'),
+    certificationNumber: text(data, 'certificationNumber'),
+  };
+
+  // Absent on an auction, where the form does not offer it.
+  const price = text(data, 'priceInr');
+  if (price !== '') {
+    const n = Number(price);
+    if (Number.isFinite(n) && n > 0) body['priceInr'] = Math.round(n);
+  }
+
+  const admin = await isAdmin(token);
+  const result = await api(
+    admin ? `/v1/admin/listings/${listingId}` : `/v1/listings/${listingId}`,
+    { method: 'PATCH', token, body },
+  );
+
+  revalidatePath(`/listing/${listingId}`);
+  revalidatePath(`/listing/${listingId}/edit`);
+  revalidatePath('/seller/items');
+  revalidatePath('/admin/products');
+
+  if (!result.ok) {
+    redirect(`/listing/${listingId}/edit?error=${encodeURIComponent(result.error.message)}`);
+  }
+  redirect(`/listing/${listingId}/edit?saved=1`);
+}
+
+/** Remove one photograph, as its owner or as staff. */
+export async function deleteListingPhoto(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const mediaId = text(data, 'mediaId');
+  if (listingId === '' || mediaId === '') return;
+
+  const admin = await isAdmin(token);
+  const result = await api(
+    admin
+      ? `/v1/admin/listings/${listingId}/media/${mediaId}`
+      : `/v1/listings/${listingId}/media/${mediaId}`,
+    { method: 'DELETE', token },
+  );
+
+  revalidatePath(`/listing/${listingId}`);
+  revalidatePath(`/listing/${listingId}/edit`);
+  if (!result.ok) {
+    redirect(`/listing/${listingId}/edit?error=${encodeURIComponent(result.error.message)}`);
+  }
+}
+
+/**
+ * Turn a fixed-price listing into an auction, or back again.
+ *
+ * The API refuses the dangerous direction — an auction that is live and has
+ * bids on it — and its refusal is what the buyer of that promise is owed, so
+ * it is shown rather than swallowed.
+ */
+export async function setSaleMode(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const saleMode = text(data, 'saleMode');
+  if (listingId === '' || (saleMode !== 'fixed' && saleMode !== 'auction')) return;
+
+  const body: Record<string, unknown> = { saleMode };
+  const price = text(data, 'priceInr');
+  if (saleMode === 'fixed' && price !== '') {
+    const n = Number(price);
+    if (Number.isFinite(n) && n > 0) body['priceInr'] = Math.round(n);
+  }
+
+  const result = await api(`/v1/listings/${listingId}/sale-mode`, {
+    method: 'POST',
+    token,
+    body,
+  });
+
+  revalidatePath(`/listing/${listingId}`);
+  revalidatePath(`/listing/${listingId}/edit`);
+  revalidatePath('/seller/auctions');
+
+  if (!result.ok) {
+    redirect(`/listing/${listingId}/edit?error=${encodeURIComponent(result.error.message)}`);
+  }
+  redirect(
+    saleMode === 'auction'
+      ? '/seller/auctions?converted=1'
+      : `/listing/${listingId}/edit?saved=1`,
+  );
+}
+
+/** Whether this session belongs to staff. One cheap call, cached per request. */
+async function isAdmin(token: string): Promise<boolean> {
+  const me = await api<{ user: { roles: string[] } }>('/v1/auth/me', { token });
+  return me.ok && me.data.user.roles.includes('admin');
+}
+
 /* ----------------------------- addresses ----------------------------- */
 
 /**

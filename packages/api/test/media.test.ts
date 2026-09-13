@@ -304,3 +304,60 @@ describe('an admin adding a photograph', () => {
     assert.equal(res.status, 404);
   });
 });
+
+describe('a seller removing their own photograph', () => {
+  it('removes the row, and stays removed', async () => {
+    const token = await seller('md1@example.com');
+    const id = await listing(token, '9AB 170001');
+    const up = await upload(token, id, JPEG, 'x.jpg', 'image/jpeg');
+    const { media } = (await up.json()) as { media: { id: string; url: string } };
+
+    const res = await app.handle(
+      new Request(`http://api.test/v1/listings/${id}/media/${media.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      TEST_IP,
+    );
+    assert.equal(res.status, 200, await res.clone().text());
+
+    const left = await app.handle(
+      new Request(`http://api.test/v1/listings/${id}/media`),
+      TEST_IP,
+    );
+    const body = (await left.json()) as { media: unknown[] };
+    assert.equal(body.media.length, 0);
+
+    // Only the row is deleted — the file on disk is left alone deliberately,
+    // because a photograph taken down after a dispute has started is
+    // evidence. That is not asserted here: the route reads UPLOAD_DIR when
+    // its module is first imported, which happens before this file's before()
+    // hook can point it at a scratch directory, so the path a test could
+    // check is not the path the app actually wrote to.
+    const again = await app.handle(
+      new Request(`http://api.test/v1/listings/${id}/media/${media.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      TEST_IP,
+    );
+    assert.equal(again.status, 404);
+  });
+
+  it('refuses another seller reaching for it', async () => {
+    const mine = await seller('md2@example.com');
+    const id = await listing(mine, '9AB 170002');
+    const up = await upload(mine, id, JPEG, 'x.jpg', 'image/jpeg');
+    const { media } = (await up.json()) as { media: { id: string } };
+
+    const theirs = await seller('md3@example.com');
+    const res = await app.handle(
+      new Request(`http://api.test/v1/listings/${id}/media/${media.id}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${theirs}` },
+      }),
+      TEST_IP,
+    );
+    assert.equal(res.status, 403);
+  });
+});

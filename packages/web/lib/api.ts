@@ -122,6 +122,7 @@ export interface ApiListing {
   // single-listing endpoint joins the seller, so the name is optional.
   description?: string | null;
   sellerName?: string;
+  categoryId?: string | null;
   state: string;
   saleMode?: string;
   kind?: string;

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { BannerSlot } from '@/components/BannerSlot.tsx';
-import { BrowseFilters } from '@/components/BrowseFilters.tsx';
+import { BrowseFilters, type FilterCategory } from '@/components/BrowseFilters.tsx';
 import { BuyerFrame } from '@/components/BuyerFrame.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
@@ -40,6 +40,7 @@ export default async function BrowsePage({
     kind?: string;
     q?: string;
     price?: string;
+    category?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -47,6 +48,7 @@ export default async function BrowsePage({
   const pattern = params.pattern;
   const kind = params.kind?.trim() ?? '';
   const q = params.q?.trim() ?? '';
+  const category = params.category?.trim() ?? '';
 
   // One field on the wire, two bounds underneath: "2000-10000", or one side
   // left empty for an open end. Anything that is not a pair of digits is
@@ -73,12 +75,19 @@ export default async function BrowsePage({
     if (q !== '') search.set('q', q.slice(0, 80));
     if (minPrice !== '') search.set('minPrice', minPrice);
     if (maxPrice !== '') search.set('maxPrice', maxPrice);
+    if (/^[a-z0-9-]{1,80}$/.test(category)) search.set('category', category);
     path = `/v1/listings?${search.toString()}`;
   }
 
-  const result = await api<
-    { listings: ApiListing[] } & { exact?: ApiListing[]; dayMonth?: ApiListing[] }
-  >(path);
+  // The catalogue tree, alongside the listings rather than after them. Cached
+  // briefly: it changes when staff edit it, which is rarely, and it is on
+  // every view of the floor.
+  const [result, categoryResult] = await Promise.all([
+    api<{ listings: ApiListing[] } & { exact?: ApiListing[]; dayMonth?: ApiListing[] }>(path),
+    api<{ categories: FilterCategory[] }>('/v1/categories', { revalidate: 300 }),
+  ]);
+
+  const categories = categoryResult.ok ? categoryResult.data.categories : [];
 
   const exact = result.ok ? (result.data.exact ?? []) : [];
   const near = result.ok ? (result.data.dayMonth ?? []) : [];
@@ -127,6 +136,8 @@ export default async function BrowsePage({
               date={date}
               pattern={pattern}
               q={q}
+              category={category}
+              categories={categories}
             />
           </aside>
 

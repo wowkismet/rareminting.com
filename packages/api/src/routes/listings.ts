@@ -153,6 +153,7 @@ interface ListingRow {
   grade: string | null;
   published_at: Date | string | null;
   created_at: Date | string;
+  category_id?: string | null;
   // Joined from sellers, so a description can be attributed to the person who
   // wrote it. Optional because the list queries do not join.
   seller_name?: string;
@@ -204,6 +205,7 @@ function publicListing(
     kind: listing.kind,
     title: listing.title,
     description: listing.description,
+    ...(listing.category_id === undefined ? {} : { categoryId: listing.category_id }),
     ...(listing.seller_name === undefined ? {} : { sellerName: listing.seller_name }),
     state: listing.state,
     saleMode: listing.sale_mode,
@@ -408,6 +410,48 @@ export function registerListingRoutes(router: Router, database: Database): void 
     }
 
     return json(loaded);
+  });
+
+  /**
+   * GET /v1/categories — the catalogue tree.
+   *
+   * Public and anonymous: it is what the browse filters and the listing editor
+   * are both built from, and neither should need a session. Counts are of
+   * listings actually filed in each category and visible, so an empty branch
+   * reads as empty rather than as broken.
+   */
+  router.add('GET', '/v1/categories', async (ctx) => {
+    const rows = await ctx.db.query<{
+      id: string;
+      slug: string;
+      name: string;
+      kind: string;
+      parent_id: string | null;
+      sort_order: number;
+      description: string | null;
+      listings: string;
+    }>(
+      `select c.id, c.slug, c.name, c.kind::text as kind, c.parent_id::text as parent_id,
+              c.sort_order, c.description,
+              (select count(*) from listings l
+                where l.category_id = c.id
+                  and l.state = 'minted' and l.deleted_at is null)::text as listings
+         from categories c
+        order by c.sort_order asc, c.name asc`,
+    );
+
+    return json({
+      categories: rows.rows.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        kind: r.kind,
+        parentId: r.parent_id,
+        sortOrder: r.sort_order,
+        description: r.description,
+        listings: Number(r.listings),
+      })),
+    });
   });
 
   /**
@@ -708,6 +752,14 @@ export function registerListingRoutes(router: Router, database: Database): void 
       const minPaise = bound('minPrice');
       const maxPaise = bound('maxPrice');
 
+      // A category, by slug. Matching the slug rather than the id keeps the
+      // URLs readable and shareable, and choosing a parent includes everything
+      // filed beneath it — somebody browsing "Rare coins" means the whole
+      // branch, not only the listings nobody put in a sub-category.
+      const categorySlug = ctx.url.searchParams.get('category');
+      const category =
+        categorySlug !== null && /^[a-z0-9-]{1,80}$/.test(categorySlug) ? categorySlug : null;
+
       const rows = await ctx.db.query<
         ListingRow & { thumb: string | null } & Partial<NoteRow>
       >(
@@ -728,9 +780,13 @@ export function registerListingRoutes(router: Router, database: Database): void 
                  or l.title         ilike '%' || $4 || '%')
             and ($5::bigint is null or l.price_paise >= $5::bigint)
             and ($6::bigint is null or l.price_paise <= $6::bigint)
+            and ($7::text is null or l.category_id in (
+                  select c.id from categories c
+                   where c.slug = $7::text
+                      or c.parent_id = (select id from categories where slug = $7::text)))
           order by ${orderBy}
           limit $1`,
-        [limit, codes, kindParam, query, minPaise, maxPaise],
+        [limit, codes, kindParam, query, minPaise, maxPaise, category],
       );
 
       // The true number matching, not the number on this page. The homepage
@@ -750,8 +806,12 @@ export function registerListingRoutes(router: Router, database: Database): void 
                  or n.serial_digits ilike '%' || $3 || '%'
                  or l.title         ilike '%' || $3 || '%')
             and ($4::bigint is null or l.price_paise >= $4::bigint)
-            and ($5::bigint is null or l.price_paise <= $5::bigint)`,
-        [codes, kindParam, query, minPaise, maxPaise],
+            and ($5::bigint is null or l.price_paise <= $5::bigint)
+            and ($6::text is null or l.category_id in (
+                  select c.id from categories c
+                   where c.slug = $6::text
+                      or c.parent_id = (select id from categories where slug = $6::text)))`,
+        [codes, kindParam, query, minPaise, maxPaise, category],
       );
 
       return json({
@@ -824,6 +884,7 @@ export function registerListingRoutes(router: Router, database: Database): void 
     const listingResult = await ctx.db.query<ListingRow>(
       `select l.id, l.seller_id, l.kind, l.title, l.description, l.state, l.sale_mode,
               l.price_paise, l.grade, l.published_at, l.created_at,
+              l.category_id::text as category_id,
               s.display_name as seller_name
          from listings l
          join sellers s on s.id = l.seller_id

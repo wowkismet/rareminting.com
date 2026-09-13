@@ -31,6 +31,14 @@ const PRICE_BANDS = [
   ['50000', '', 'Over ₹50,000'],
 ] as const;
 
+export interface FilterCategory {
+  slug: string;
+  name: string;
+  parentId: string | null;
+  id: string;
+  listings: number;
+}
+
 export function BrowseFilters({
   kind,
   minPrice,
@@ -38,6 +46,8 @@ export function BrowseFilters({
   date,
   pattern,
   q,
+  category = '',
+  categories = [],
 }: {
   kind: string;
   minPrice: string;
@@ -45,8 +55,13 @@ export function BrowseFilters({
   date?: string | undefined;
   pattern?: string | undefined;
   q?: string | undefined;
+  category?: string;
+  categories?: readonly FilterCategory[];
 }) {
-  const active = kind !== '' || minPrice !== '' || maxPrice !== '';
+  const active = kind !== '' || minPrice !== '' || maxPrice !== '' || category !== '';
+
+  const tops = categories.filter((c) => c.parentId === null);
+  const childrenOf = (id: string) => categories.filter((c) => c.parentId === id);
 
   return (
     <form
@@ -59,24 +74,84 @@ export function BrowseFilters({
       {date !== undefined && <input type="hidden" name="date" value={date} />}
       {pattern !== undefined && <input type="hidden" name="pattern" value={pattern} />}
       {q !== undefined && q !== '' && <input type="hidden" name="q" value={q} />}
+      {/* Where the tree is in use, the broad kind rides along so a category
+          filter does not silently widen a floor already narrowed by kind. */}
+      {tops.length > 0 && kind !== '' && <input type="hidden" name="kind" value={kind} />}
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
-          Category
-        </legend>
-        {KINDS.map(([value, label]) => (
-          <label key={value} className="flex cursor-pointer items-center gap-2 text-sm text-slate">
+      {/* The catalogue tree where staff have built one, the broad item kinds
+          where they have not. Both are real filters; the tree is the finer of
+          the two and is the one staff can extend without a migration. */}
+      {tops.length > 0 ? (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
+            Category
+          </legend>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate">
             <input
               type="radio"
-              name="kind"
-              value={value}
-              defaultChecked={kind === value}
+              name="category"
+              value=""
+              defaultChecked={category === ''}
               className="accent-accent-deep"
             />
-            {label}
+            Everything
           </label>
-        ))}
-      </fieldset>
+          {tops.map((top) => (
+            <div key={top.id} className="flex flex-col gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate">
+                <input
+                  type="radio"
+                  name="category"
+                  value={top.slug}
+                  defaultChecked={category === top.slug}
+                  className="accent-accent-deep"
+                />
+                {top.name}
+              </label>
+              {childrenOf(top.id).length > 0 && (
+                <div className="ml-5 flex flex-col gap-1.5 border-l border-sand-line pl-3">
+                  {childrenOf(top.id).map((sub) => (
+                    <label
+                      key={sub.id}
+                      className="flex cursor-pointer items-center gap-2 text-[13px] text-slate-dim"
+                    >
+                      <input
+                        type="radio"
+                        name="category"
+                        value={sub.slug}
+                        defaultChecked={category === sub.slug}
+                        className="accent-accent-deep"
+                      />
+                      {sub.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </fieldset>
+      ) : (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
+            Category
+          </legend>
+          {KINDS.map(([value, label]) => (
+            <label
+              key={value}
+              className="flex cursor-pointer items-center gap-2 text-sm text-slate"
+            >
+              <input
+                type="radio"
+                name="kind"
+                value={value}
+                defaultChecked={kind === value}
+                className="accent-accent-deep"
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      )}
 
       <fieldset className="flex flex-col gap-2 border-t border-sand-line pt-5">
         <legend className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">

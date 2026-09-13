@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import { deleteListingPhoto, editListingFull, setSaleMode, uploadPhoto } from '@/app/actions.ts';
+import type { FilterCategory } from '@/components/BrowseFilters.tsx';
 import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { Panel } from '@/components/DashboardPanels.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
@@ -70,6 +71,12 @@ export default async function EditListingPage({
   const isAuction = listing.saleMode === 'auction';
   const media = listing.media ?? [];
 
+  const categoryResult = await api<{ categories: FilterCategory[] }>('/v1/categories', {
+    revalidate: 300,
+  });
+  const categories = categoryResult.ok ? categoryResult.data.categories : [];
+  const tops = categories.filter((c) => c.parentId === null);
+
   const sections =
     sellerProfile === null
       ? buyerMenu({ orders: 0, isSeller: false })
@@ -130,6 +137,35 @@ export default async function EditListingPage({
                   own account from the serial, the grade and the dates it reads as.
                 </span>
               </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
+                  Category
+                </span>
+                <select
+                  name="categoryId"
+                  defaultValue={listing.categoryId ?? ''}
+                  className="rounded-sm border border-sand-line bg-sand px-3 py-2 text-sm text-slate"
+                >
+                  <option value="">Not filed</option>
+                  {tops.map((top) => (
+                    <optgroup key={top.id} label={top.name}>
+                      <option value={top.id}>{top.name} — all</option>
+                      {categories
+                        .filter((c) => c.parentId === top.id)
+                        .map((sub) => (
+                          <option key={sub.id} value={sub.id}>
+                            {sub.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <span className="text-xs text-slate-dim">
+                  Where buyers find it when they filter the floor. Pick the sub-category if one
+                  fits; the top level is fine if none does.
+                </span>
+              </label>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">
                   <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">

@@ -73,7 +73,7 @@ async function isStaff(ctx: Ctx, userId: string): Promise<boolean> {
 interface BannerRow {
   id: string;
   slot: string;
-  headline: string;
+  headline: string | null;
   subtext: string | null;
   href: string | null;
   cta_label: string | null;
@@ -167,13 +167,12 @@ export function registerBannerRoutes(router: Router, _database: Database): void 
     }
     const slot = slotValue as Slot;
 
+    // Optional now. Left empty, the uploaded artwork is shown whole and
+    // nothing is drawn over it — which is the point when a designer has
+    // handed over a finished piece. The check that the banner says
+    // *something* comes after the file is read, because an image alone is
+    // enough and a headline alone is enough; neither is not.
     const headline = str('headline');
-    if (headline === null) {
-      throw badRequest('A banner needs a headline — it is what somebody reads.', {
-        headline: 'required',
-      });
-    }
-
     const altText = str('altText');
     let storageKey: string | null = null;
 
@@ -198,6 +197,11 @@ export function registerBannerRoutes(router: Router, _database: Database): void 
       const target = path.join(UPLOAD_DIR, storageKey);
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, bytes);
+    }
+
+    // One of the two, or there is nothing on the page but an empty box.
+    if (headline === null && storageKey === null) {
+      throw badRequest('A banner needs artwork, a headline, or both.', { headline: 'required' });
     }
 
     const created = await ctx.db.query<{ id: string }>(
@@ -239,7 +243,7 @@ export function registerBannerRoutes(router: Router, _database: Database): void 
 
     const id = ctx.params['id'] ?? '';
     const before = one(
-      await ctx.db.query<{ is_active: boolean; headline: string }>(
+      await ctx.db.query<{ is_active: boolean; headline: string | null }>(
         `select is_active, headline from banners where id = $1`,
         [id],
       ),
@@ -256,9 +260,11 @@ export function registerBannerRoutes(router: Router, _database: Database): void 
       patch['sort_order'] = n;
     }
     if ('headline' in fields) {
+      // Clearing it turns a typeset banner into bare artwork. The database
+      // refuses that on a banner with no image, so a banner that is only
+      // words cannot be emptied into nothing.
       const h = String(fields['headline'] ?? '').trim();
-      if (h === '') throw badRequest('A banner needs a headline.', { headline: 'required' });
-      patch['headline'] = h.slice(0, 200);
+      patch['headline'] = h === '' ? null : h.slice(0, 200);
     }
     if ('endsAt' in fields) patch['ends_at'] = fields['endsAt'] === null ? null : String(fields['endsAt']);
     if (Object.keys(patch).length === 0) throw badRequest('Nothing to change.');
@@ -286,7 +292,7 @@ export function registerBannerRoutes(router: Router, _database: Database): void 
 
     const id = ctx.params['id'] ?? '';
     const before = one(
-      await ctx.db.query<{ headline: string; slot: string }>(
+      await ctx.db.query<{ headline: string | null; slot: string }>(
         `select headline, slot::text as slot from banners where id = $1`,
         [id],
       ),

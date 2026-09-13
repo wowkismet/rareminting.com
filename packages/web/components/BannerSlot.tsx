@@ -6,15 +6,24 @@ import { api } from '@/lib/api.ts';
  * Renders nothing at all when the slot is empty, so a page with no banner has
  * no gap where one would be — an empty box with a border is worse than no box.
  *
- * The headline is real text over the image rather than words baked into it.
- * Type in an image cannot be read aloud, does not survive a slow connection,
- * is invisible to a search engine and cannot reflow on a phone, and this is a
- * marketplace where a good many buyers arrive on a phone.
+ * Two kinds of banner, and the difference matters.
+ *
+ * A banner *we* typeset carries a headline as real text over a photograph.
+ * Type baked into an image cannot be read aloud, does not survive a slow
+ * connection, is invisible to a search engine and cannot reflow on a phone,
+ * and a good many buyers arrive on one.
+ *
+ * A banner that is *finished artwork* carries no headline at all. Laying our
+ * own heading and a darkening scrim over a designed piece damages the thing
+ * we were handed, and cropping it to fit a fixed box throws away the edges it
+ * was composed around. So when there is no headline the image is rendered
+ * whole: its own aspect ratio, nothing over it, nothing cut off.
  */
 
 interface Banner {
   id: string;
-  headline: string;
+  /** Null when the artwork carries its own words. */
+  headline: string | null;
   subtext: string | null;
   href: string | null;
   ctaLabel: string | null;
@@ -29,6 +38,27 @@ export async function BannerSlot({ slot, className }: { slot: string; className?
   const result = await api<{ banners: Banner[] }>(`/v1/banners?slot=${slot}`, { revalidate: 60 });
   const banner = result.ok ? result.data.banners[0] : undefined;
   if (banner === undefined) return null;
+
+  // Artwork on its own. No box, no border, no scrim, no words — the image at
+  // its own aspect ratio, complete on every screen. `h-auto` with no fixed
+  // height is what guarantees nothing is cropped: the container takes the
+  // shape of the picture rather than the picture being cut to fit a container.
+  if (banner.headline === null && banner.imageUrl !== null) {
+    const art = (
+      <img
+        src={banner.imageUrl}
+        alt={banner.altText ?? ''}
+        className="block h-auto w-full rounded-sm"
+      />
+    );
+    return banner.href === null ? (
+      <div className={className ?? ''}>{art}</div>
+    ) : (
+      <a href={banner.href} className={`block ${className ?? ''} transition-opacity hover:opacity-95`}>
+        {art}
+      </a>
+    );
+  }
 
   const body = (
     <div className="relative isolate overflow-hidden rounded-sm border border-line bg-primary">

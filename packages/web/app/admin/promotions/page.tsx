@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 interface Banner {
   id: string;
   slot: string;
-  headline: string;
+  headline: string | null;
   subtext: string | null;
   href: string | null;
   ctaLabel: string | null;
@@ -106,13 +106,12 @@ export default async function AdminPromotionsPage() {
 
             <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="font-mono text-[10px] uppercase tracking-wider text-slate-dim">
-                Headline
+                Headline — leave empty for artwork only
               </span>
               <input
                 name="headline"
-                required
                 maxLength={200}
-                placeholder="A note that spells your date"
+                placeholder="Leave blank to show the uploaded image on its own"
                 className="rounded-sm border border-sand-line bg-sand px-3 py-2 text-sm text-slate"
               />
             </label>
@@ -208,10 +207,15 @@ export default async function AdminPromotionsPage() {
           </form>
 
           <p className="mt-4 text-xs leading-relaxed text-slate-dim">
-            The headline is real text laid over the image rather than words baked into it — type in
-            a picture cannot be read aloud, does not survive a slow connection and is invisible to
-            a search engine. A link must be somewhere on this site. Leaving the end date empty means
-            it runs until somebody turns it off, which is usually longer than intended.
+            <strong className="text-slate">Leave the headline empty to show your artwork on its
+            own</strong> — complete, uncropped, with nothing laid over it. That is what you want for
+            a finished promotional piece where the words are already part of the design.
+            {" "}
+            Fill the headline in and it becomes real text over the image instead, with a scrim to
+            keep it readable: better for a screen reader, a slow connection and search, and the
+            right choice when the words are ours rather than the designer's. A link must be
+            somewhere on this site. Leaving the end date empty means it runs until somebody turns
+            it off, which is usually longer than intended.
           </p>
         </Panel>
 
@@ -243,7 +247,9 @@ export default async function AdminPromotionsPage() {
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-sm text-slate">{b.headline}</p>
+                            <p className="text-sm text-slate">
+                              {b.headline ?? <em className="text-slate-dim">Artwork only — no text over it</em>}
+                            </p>
                             {b.subtext !== null && (
                               <p className="text-xs text-slate-dim">{b.subtext}</p>
                             )}

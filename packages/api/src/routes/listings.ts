@@ -17,6 +17,8 @@ import { badRequest, conflict, forbidden, notFound } from '../errors.ts';
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { PG_UNIQUE_VIOLATION, one, pgConstraint, pgErrorCode, type Database } from '../db.ts';
 import { requireApprovedSeller, requireSeller } from './sellers.ts';
+import { assertEditable, readListingPatch } from '../listing-edit.ts';
+import { auditAll } from '../audit.ts';
 
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 
@@ -47,6 +49,23 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 const OPEN_STATES = ['draft', 'pending_review', 'minted', 'reserved'] as const;
+
+/**
+ * Whether the caller is staff.
+ *
+ * Used where a route serves both a seller acting on their own listing and an
+ * admin acting on anybody's. Returns false rather than throwing for somebody
+ * signed out, so the caller can fall through to the seller check and give the
+ * more useful error of the two.
+ */
+async function isAdminUser(ctx: Ctx): Promise<boolean> {
+  if (ctx.session === null) return false;
+  const roles = await ctx.db.query<{ role: string }>(
+    `select role from user_roles where user_id = $1 and role = 'admin'`,
+    [ctx.session.userId],
+  );
+  return roles.rows.length > 0;
+}
 
 /**
  * Browsable collections, each a set of pattern codes.
@@ -389,6 +408,200 @@ export function registerListingRoutes(router: Router, database: Database): void 
     }
 
     return json(loaded);
+  });
+
+  /**
+   * PATCH /v1/listings/:id — a seller correcting their own listing.
+   *
+   * There was no such route until now. A listing was written once and frozen,
+   * so fixing a typo or dropping a price meant withdrawing the item and
+   * relisting it, which loses its views and everybody watching it.
+   *
+   * The rules live in listing-edit.ts and are shared with the admin route, so
+   * the two cannot drift into disagreeing about what a valid price is. What is
+   * decided here is only authority: this listing, and this seller.
+   */
+  router.add('PATCH', '/v1/listings/:id', async (ctx) => {
+    const seller = await requireSeller(ctx);
+    const id = ctx.params['id'] ?? '';
+
+    const before = one(
+      await ctx.db.query<{
+        seller_id: string;
+        state: string;
+        title: string;
+        description: string | null;
+        price_paise: string | null;
+        grade: string | null;
+        sale_mode: string;
+      }>(
+        `select seller_id, state, title, description,
+                price_paise::text as price_paise, grade, sale_mode
+           from listings where id = $1`,
+        [id],
+      ),
+    );
+    if (before === null) throw notFound('No such listing.');
+    if (before.seller_id !== seller.id) {
+      throw forbidden('This listing belongs to another seller.');
+    }
+    assertEditable(before.state);
+
+    // An auction with money behind it is not a fixed-price listing with a
+    // different label. Changing its terms mid-flight moves the goalposts on
+    // people who have already committed.
+    if (before.sale_mode === 'auction') {
+      const live = one(
+        await ctx.db.query<{ bid_count: number; state: string }>(
+          `select bid_count, state::text as state from auctions where listing_id = $1`,
+          [id],
+        ),
+      );
+      if (live !== null && live.bid_count > 0) {
+        throw conflict(
+          `This auction already has ${live.bid_count} bid${live.bid_count === 1 ? '' : 's'}. Its terms cannot be changed while people are bidding on them.`,
+        );
+      }
+    }
+
+    const patch = readListingPatch(asObject(await ctx.body()));
+
+    const keys = Object.keys(patch.columns);
+    const sets = keys.map((k, i) => `${k} = $${i + 2}`);
+    const updated = await ctx.db.query<{
+      id: string;
+      title: string;
+      description: string | null;
+      price_paise: string | null;
+      grade: string | null;
+      state: string;
+    }>(
+      `update listings set ${sets.join(', ')} where id = $1
+       returning id, title, description, price_paise::text as price_paise, grade, state`,
+      [id, ...keys.map((k) => patch.columns[k])],
+    );
+
+    await auditAll(ctx, ctx.session!.userId, 'seller', patch.actions, 'listing', id, before, patch.columns);
+
+    const row = updated.rows[0]!;
+    return json({
+      listing: {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        priceInr: row.price_paise === null ? null : Number(row.price_paise) / 100,
+        grade: row.grade,
+        state: row.state,
+      },
+    });
+  });
+
+  /**
+   * POST /v1/listings/:id/sale-mode — fixed ⇄ auction.
+   *
+   * The dangerous direction is auction → fixed. An auction with bids is a
+   * standing promise to the people who made them, and turning it into a
+   * fixed-price sale breaks that promise silently. So bids are the line: none,
+   * and the auction row is kept but stood down; one or more, and the change is
+   * refused outright rather than confirmed away by whoever happens to be
+   * logged in.
+   *
+   * The auction row is never deleted. Converting back is common — a seller
+   * tries an auction, gets no interest, and sells at a fixed price — and the
+   * previous configuration is what they will want when they try again. It also
+   * has to survive for the audit trail to mean anything.
+   */
+  router.add('POST', '/v1/listings/:id/sale-mode', async (ctx) => {
+    const id = ctx.params['id'] ?? '';
+    const fields = asObject(await ctx.body());
+    const mode = oneOf(fields, 'saleMode', ['fixed', 'auction'] as const);
+
+    const listing = one(
+      await ctx.db.query<{ seller_id: string; state: string; sale_mode: string; price_paise: string | null }>(
+        `select seller_id, state, sale_mode, price_paise::text as price_paise
+           from listings where id = $1`,
+        [id],
+      ),
+    );
+    if (listing === null) throw notFound('No such listing.');
+
+    // Either the seller who owns it, or an admin. Admin is the marketplace
+    // operator and is not fenced out of a listing merely for not having
+    // created it.
+    const isAdmin = await isAdminUser(ctx);
+    if (!isAdmin) {
+      const seller = await requireSeller(ctx);
+      if (listing.seller_id !== seller.id) {
+        throw forbidden('This listing belongs to another seller.');
+      }
+    }
+    assertEditable(listing.state);
+
+    if (listing.sale_mode === mode) {
+      throw badRequest(`This listing is already ${mode === 'auction' ? 'an auction' : 'a fixed-price sale'}.`, {
+        saleMode: 'unchanged',
+      });
+    }
+
+    const auction = one(
+      await ctx.db.query<{ id: string; bid_count: number; state: string }>(
+        `select id, bid_count, state::text as state from auctions where listing_id = $1`,
+        [id],
+      ),
+    );
+
+    if (mode === 'fixed') {
+      if (auction !== null && auction.bid_count > 0 && auction.state === 'live') {
+        throw conflict(
+          `This auction has ${auction.bid_count} bid${auction.bid_count === 1 ? '' : 's'} on it. Bids are a commitment by the people who made them, so it cannot become a fixed-price sale while it is running. End the auction first.`,
+        );
+      }
+      if (listing.price_paise === null && fields['priceInr'] === undefined) {
+        throw badRequest('Set a price before turning this into a fixed-price sale.', {
+          priceInr: 'required',
+        });
+      }
+
+      await ctx.db.query(
+        `update listings set sale_mode = 'fixed',
+                             price_paise = coalesce($2::bigint, price_paise),
+                             updated_at = now()
+          where id = $1`,
+        [id, fields['priceInr'] === undefined ? null : Number(fields['priceInr']) * 100],
+      );
+      // Stood down, not deleted — the configuration is what a seller wants
+      // back when they try an auction again, and the history has to survive.
+      if (auction !== null) {
+        await ctx.db.query(`update auctions set state = 'cancelled', updated_at = now() where id = $1`, [
+          auction.id,
+        ]);
+      }
+    } else {
+      await ctx.db.query(
+        `update listings set sale_mode = 'auction', updated_at = now() where id = $1`,
+        [id],
+      );
+      // The auction itself is configured through POST /v1/listings/:id/auction,
+      // which already knows how to validate a window and a starting price.
+      // Reviving a stood-down row here would resurrect dates that are in the
+      // past.
+    }
+
+    await auditAll(
+      ctx,
+      ctx.session!.userId,
+      isAdmin ? 'admin' : 'seller',
+      ['SALE_TYPE_CHANGED'],
+      'listing',
+      id,
+      { saleMode: listing.sale_mode },
+      { saleMode: mode },
+    );
+
+    return json({
+      listing: { id, saleMode: mode },
+      needsAuctionSetup: mode === 'auction',
+    });
   });
 
   /** POST /v1/listings/:id/publish — draft → minted. */

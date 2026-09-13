@@ -16,6 +16,8 @@ import { asObject, oneOf, optionalString, requiredString } from '../validate.ts'
 import { one } from '../db.ts';
 import { csvName, csvResponse, toCsv } from '../csv.ts';
 import { storeUpload } from './media.ts';
+import { auditAll } from '../audit.ts';
+import { assertEditable, readListingPatch } from '../listing-edit.ts';
 
 const KYC_STATES = ['pending', 'under_review', 'verified', 'rejected', 'suspended'] as const;
 const LISTING_STATES = ['pending_review', 'minted', 'withdrawn', 'rejected'] as const;
@@ -581,53 +583,12 @@ export function registerAdminRoutes(router: Router): void {
     );
     if (before === null) throw notFound('No such listing.');
 
-    const patch: Record<string, unknown> = {};
+    // The same rules the seller route uses. Two editors drift -- one gains a
+    // field, the other does not -- and eventually they disagree about what a
+    // valid price is. Authority differs by actor; validation does not.
+    const edit = readListingPatch(fields);
+    const patch = edit.columns;
 
-    if ('title' in fields) {
-      const title = requiredString(fields, 'title', 200);
-      if (title.trim().length < 2) {
-        throw badRequest('A title needs at least a couple of characters.', { title: 'too_short' });
-      }
-      patch['title'] = title.trim();
-    }
-
-    if ('description' in fields) {
-      patch['description'] = optionalString(fields, 'description', 4000);
-    }
-
-    if ('grade' in fields) {
-      const grade = optionalString(fields, 'grade', 8);
-      if (grade !== null && !(GRADES as readonly string[]).includes(grade)) {
-        throw badRequest(`Grade must be one of ${GRADES.join(', ')}.`, { grade: 'unknown' });
-      }
-      patch['grade'] = grade;
-    }
-
-    if ('priceInr' in fields) {
-      const raw = fields['priceInr'];
-      if (raw === null) {
-        patch['price_paise'] = null;
-      } else {
-        const inr = Number(raw);
-        if (!Number.isFinite(inr) || inr <= 0 || !Number.isInteger(inr)) {
-          throw badRequest('Price must be a whole number of rupees, above zero.', {
-            priceInr: 'invalid',
-          });
-        }
-        // A price is stored in paise and never in floating point. Anything
-        // beyond this is a typo rather than a banknote.
-        if (inr > 100_000_000) {
-          throw badRequest('That price looks like a mistake. Check it and try again.', {
-            priceInr: 'implausible',
-          });
-        }
-        patch['price_paise'] = inr * 100;
-      }
-    }
-
-    if (Object.keys(patch).length === 0) {
-      throw badRequest('Nothing to change.', { body: 'empty' });
-    }
 
     const sets = Object.keys(patch).map((k, i) => `${k} = $${i + 2}`);
     const updated = await ctx.db.query<{
@@ -644,7 +605,9 @@ export function registerAdminRoutes(router: Router): void {
       [id, ...Object.values(patch)],
     );
 
-    await audit(ctx, actorId, 'listing.edit', 'listing', id, before, patch);
+    // Named actions rather than one generic 'edited', so the trail can be
+    // searched for PRICE_CHANGED when a dispute turns on a price.
+    await auditAll(ctx, actorId, 'admin', edit.actions, 'listing', id, before, patch);
 
     const row = updated.rows[0]!;
     return json({

@@ -417,7 +417,11 @@ export async function deleteAddress(data: FormData): Promise<void> {
 export async function createBanner(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');
-  if (text(data, 'headline') === '' || text(data, 'slot') === '') return;
+  // A headline is no longer required: leaving it empty is how staff say
+  // "show the artwork on its own". The API still refuses a banner that has
+  // neither a headline nor an image.
+  const hasArt = data.get('file') instanceof File && (data.get('file') as File).size > 0;
+  if (text(data, 'slot') === '' || (text(data, 'headline') === '' && !hasArt)) return;
 
   // Forwarded as multipart so the image never lands in this process. Empty
   // fields are dropped rather than sent as empty strings, which would store a

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { MenuSection } from '@/components/DashboardShell.tsx';
+import { unifiedMenu } from '@/lib/dashboard-menu.ts';
 
 /** An order as the list endpoint returns it, from either side. */
 export interface BuyerOrder {
@@ -15,10 +16,16 @@ export interface BuyerOrder {
 }
 
 /**
- * The buyer's menu.
+ * The menu, from a page that holds the buying counts.
  *
- * A seller link appears only once somebody actually sells, so a buyer is not
- * offered a dashboard that would redirect them straight to a registration form.
+ * A thin wrapper now: there is one menu for everybody, built in
+ * lib/dashboard-menu.ts. This keeps the old signature so the pages calling it
+ * did not all have to change on the same day, and fills in the buying badges
+ * it already has to hand.
+ *
+ * `isSeller` no longer decides whether selling appears — it always does —
+ * only how it reads. Somebody who has never sold gets one invitation to
+ * start rather than seven links that would each turn them away.
  */
 export function buyerMenu({
   orders,
@@ -31,28 +38,7 @@ export function buyerMenu({
   cart?: number;
   saved?: number;
 }): MenuSection[] {
-  return [
-    {
-      title: 'Buying',
-      items: [
-        { href: '/account', label: 'Overview' },
-        { href: '/cart', label: 'Cart', badge: cart },
-        { href: '/saved', label: 'Saved', badge: saved },
-        { href: '/orders', label: 'My orders', badge: orders },
-        { href: '/browse', label: 'Find a date' },
-        { href: '/auctions', label: 'Auctions' },
-      ],
-    },
-    {
-      title: 'You',
-      items: [
-        ...(isSeller ? [{ href: '/seller', label: 'Seller dashboard' }] : []),
-        { href: '/support', label: 'Help & support' },
-        { href: '/contact', label: 'Contact' },
-        { href: '/refunds', label: 'Refunds' },
-      ],
-    },
-  ];
+  return unifiedMenu({ isSeller, counts: { orders, cart, saved } });
 }
 
 /** A cart or saved-items line, as the API returns it. */

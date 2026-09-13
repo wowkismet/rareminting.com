@@ -55,7 +55,6 @@ export async function SiteHeader({
   compact?: boolean;
 }) {
   const isAdmin = user?.roles.includes('admin') ?? false;
-  const isSeller = user?.roles.includes('seller') ?? false;
 
   let cartCount = 0;
   let savedCount = 0;
@@ -211,7 +210,8 @@ export async function SiteHeader({
               </div>
             ) : (
               <div className="flex items-center gap-4">
-                <a href="/account" className={action}>
+                {/* The single way into the dashboard, whoever you are. */}
+                <a href="/account" className={action} aria-label="Your dashboard">
                   <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" aria-hidden>
                     <circle cx="10" cy="7" r="3.2" stroke="currentColor" strokeWidth="1.5" />
                     <path
@@ -279,14 +279,11 @@ export async function SiteHeader({
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
-            {isSeller && (
-              <a
-                href="/seller"
-                className="rounded-full border border-accent/50 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-accent-bright transition-colors hover:bg-accent hover:text-ink"
-              >
-                Dashboard
-              </a>
-            )}
+            {/* There was a second "Dashboard" here, for sellers only, pointing
+                at /seller — so a seller had two buttons to two dashboards while
+                a buyer had one. There is one dashboard now, reached by the
+                account link in the row above, and selling is a section inside
+                it rather than a separate place to be. */}
             {isAdmin && (
               <a
                 href="/admin"

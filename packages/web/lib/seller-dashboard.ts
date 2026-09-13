@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { api, type ApiUser } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
 import type { MenuSection } from '@/components/DashboardShell.tsx';
+import { unifiedMenu } from '@/lib/dashboard-menu.ts';
 
 /**
  * Shared loading and navigation for the seller's pages.
@@ -121,41 +122,18 @@ export async function loadSeller(): Promise<{ user: ApiUser; data: Dashboard }> 
 }
 
 export function sellerMenu(data: Dashboard): MenuSection[] {
-  const needsPhotos = data.listings.filter((l) => l.photoCount === 0).length;
-  return [
-    {
-      title: 'Selling',
-      items: [
-        { href: '/seller', label: 'Overview' },
-        { href: '/sell', label: 'List an item' },
-        { href: '/seller/items', label: 'My items', badge: data.stats.listings.total },
-        { href: '/seller/photos', label: 'Needs photos', badge: needsPhotos },
-        {
-          href: '/seller/auctions',
-          label: 'My auctions',
-          badge: data.stats.auctions.live + data.stats.auctions.scheduled,
-        },
-        { href: '/seller/analytics', label: 'Analytics' },
-      ],
+  // One menu for everybody -- see lib/dashboard-menu.ts. This wrapper exists
+  // so the seller pages, which already hold their dashboard data, can fill in
+  // the selling badges without another round trip.
+  return unifiedMenu({
+    isSeller: true,
+    counts: {
+      orders: data.stats.sales.orders,
+      listings: data.stats.listings.total,
+      returns: data.disputes.open,
+      reviews: data.reviews.count,
     },
-    {
-      title: 'Money',
-      items: [
-        { href: '/orders', label: 'Orders', badge: data.stats.sales.orders },
-        { href: '/seller/payouts', label: 'Payouts' },
-        { href: '/seller/returns', label: 'Returns', badge: data.disputes.open },
-      ],
-    },
-    {
-      title: 'You',
-      items: [
-        { href: '/seller/profile', label: 'Store profile' },
-        { href: '/seller/reviews', label: 'Reviews', badge: data.reviews.count },
-        { href: '/account', label: 'Account' },
-        { href: '/contact', label: 'Help' },
-      ],
-    },
-  ];
+  });
 }
 
 /**

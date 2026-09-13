@@ -19,9 +19,11 @@ export default async function SignUpPage() {
       <SiteHeader user={null} compact />
       <main className="mx-auto flex max-w-md flex-col gap-7 px-5 py-14">
         <div>
-          <h1 className="font-display text-3xl text-slate">Create an account</h1>
-          <p className="mt-2 text-sm text-slate-dim">
-            One account to buy, to save the dates that matter to you, and to sell.
+          <h1 className="font-display text-3xl text-slate">Create your account</h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-dim">
+            Buy, sell, collect and discover rare treasures — all from one account. There is
+            nothing to choose here: every member can do all four, and you can start listing
+            whenever you like.
           </p>
         </div>
 

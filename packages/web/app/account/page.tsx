@@ -102,7 +102,7 @@ export default async function AccountPage() {
   return (
     <DashboardShell
       user={user}
-      eyebrow="The Vault"
+      eyebrow="My dashboard"
       title={`Hello, ${user.fullName ?? user.email.split('@')[0]}`}
       subtitle={`Member since ${monthYear(memberSince)}`}
       sections={buyerMenu({

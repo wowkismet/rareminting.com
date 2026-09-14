@@ -132,7 +132,7 @@ export function NoteDetail({
 
       {written !== null && (
         <div className="rounded-sm border-l-2 border-accent-deep/40 pl-4">
-          <p className="whitespace-pre-wrap text-[0.95rem] leading-relaxed text-slate">{written}</p>
+          <p className="whitespace-pre-wrap font-listing text-[1rem] leading-relaxed text-slate">{written}</p>
           {sellerName !== undefined && (
             <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-dim">
               In the seller&rsquo;s words · {sellerName}
@@ -142,7 +142,7 @@ export function NoteDetail({
       )}
 
       {note !== undefined ? (
-        <div className="flex flex-col gap-3 text-[0.95rem] leading-relaxed text-slate">
+        <div className="flex flex-col gap-3 font-listing text-[1rem] leading-relaxed text-slate">
           <p>
             This is a ₹{note.denomination} note of the {note.series}, carrying the serial number{' '}
             <span className="font-mono tracking-wider">
@@ -224,7 +224,7 @@ export function NoteDetail({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 text-[0.95rem] leading-relaxed text-slate">
+        <div className="flex flex-col gap-3 font-listing text-[1rem] leading-relaxed text-slate">
           <p>
             {title} is listed as {KIND_PHRASE[kind ?? ''] ?? 'a collectible'} in{' '}
             <strong className="font-normal text-slate">{grade ?? 'unstated'}</strong> condition

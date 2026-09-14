@@ -67,7 +67,7 @@ export default async function ListingPage({
               item gets it in the dashboard header too, but repeating it above
               the photographs costs nothing and keeps one layout, not two. */}
           <div className="mt-2 flex flex-wrap items-baseline justify-between gap-3">
-            <h1 className="font-display text-3xl text-slate">{listing.title}</h1>
+            <h1 className="font-listing text-3xl text-slate">{listing.title}</h1>
             {(isOwner || (user?.roles.includes('admin') ?? false)) && (
               <a
                 href={`/listing/${listing.id}/edit`}
@@ -157,7 +157,7 @@ export default async function ListingPage({
             <dt className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-dim">
               Price
             </dt>
-            <dd className="mt-1 font-display text-2xl text-slate">
+            <dd className="mt-1 font-listing text-2xl text-slate">
               {listing.priceInr === null
                 ? 'Not priced'
                 : `₹${listing.priceInr.toLocaleString('en-IN')}`}

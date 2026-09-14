@@ -41,7 +41,7 @@ export function ListingCard({
             reads what a thing is before deciding whether to look at it, and
             two lines is enough for any title we allow — longer ones are
             clipped rather than pushing every card in the row out of line. */}
-        <h3 className="line-clamp-2 font-display text-sm leading-snug text-slate">
+        <h3 className="line-clamp-2 font-listing text-sm leading-snug text-slate">
           {listing.title}
         </h3>
 
@@ -96,7 +96,7 @@ export function ListingCard({
         )}
 
         <p className="mt-auto flex items-baseline justify-between gap-2">
-          <span className="font-display text-base text-slate">
+          <span className="font-listing text-base text-slate">
             {listing.priceInr === null ? '—' : `₹${listing.priceInr.toLocaleString('en-IN')}`}
           </span>
           <span className="text-[10px] text-slate-dim">

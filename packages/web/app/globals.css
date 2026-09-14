@@ -28,6 +28,17 @@
   --font-display: var(--font-playfair), Georgia, 'Times New Roman', serif;
   --font-ui: var(--font-inter), 'Segoe UI', system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, Consolas, monospace;
+
+  /*
+   * What a listing itself is set in: its title, its price and its description.
+   *
+   * Times New Roman by name, rather than the display face, because it was
+   * asked for by name. It is a system font on Windows and macOS and needs no
+   * download; Liberation Serif is metric-compatible and is what most Linux
+   * machines and many Android devices will actually use, so it is named ahead
+   * of the generic fallback rather than left to chance.
+   */
+  --font-listing: 'Times New Roman', 'Liberation Serif', 'Nimbus Roman', Times, serif;
 }
 
 @layer base {

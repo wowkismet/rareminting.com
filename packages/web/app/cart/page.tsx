@@ -160,7 +160,7 @@ export default async function CartPage({
                     )}
                   </div>
 
-                  <span className="font-display text-xl tabular-nums text-slate">
+                  <span className="font-listing text-xl tabular-nums text-slate">
                     {item.priceInr === null ? '—' : rupees(item.priceInr)}
                   </span>
 

@@ -3,9 +3,23 @@ import Image from 'next/image';
 /**
  * The Rare Minting logo.
  *
- * The supplied lockup: a modelled gold crown over the wordmark, with the
- * flourish and rule beneath, on a transparent ground so it sits on the deep
- * green without a box behind it.
+ * The supplied lockup — a modelled crown over the wordmark, with the flourish
+ * and rule beneath — recoloured to the palette's off-white and sitting on a
+ * transparent ground, so it reads against the navy masthead without a box
+ * behind it.
+ *
+ * Flat: every visible pixel is #F5F8FC and nothing else. The alpha channel is
+ * untouched, and it is what still carries the shape — the counters of the
+ * letters, the openings in the crown and every anti-aliased edge are holes in
+ * the alpha rather than dark pixels, so flattening the colour does not fill
+ * them in.
+ *
+ * The supplied artwork is a rendered object, so its bevels and engraving are
+ * shading, and flattening loses them: the crown's diamond insets and the
+ * flourish's finer scrollwork are gone. Cutting the darkest lines out as holes
+ * would bring them back, but the letters carry engraving too and came out
+ * gouged — the name matters more than the ornament. The gold original is kept
+ * in public/ as the way back.
  *
  * The alpha channel is reconstructed rather than original. The artwork was
  * handed over flattened — the grey-and-white chequer an editor draws *behind*
@@ -34,7 +48,7 @@ export function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
   return (
     <Image
-      src="/rare-minting-logo-crown.png"
+      src="/rare-minting-logo-white-crown.png"
       alt="Rare Minting"
       width={2048}
       height={768}

@@ -631,12 +631,17 @@ export default async function Home({
             Anchored, because the header links here: there is no /collections
             page, and a nav item pointing at one that does not exist is exactly
             the dead link this menu is meant not to have. */}
-        {/* Collections, on the dark ground the design gives them. Full-bleed
-            out of the centred column so the band reaches both edges, which is
-            what separates it from the sections either side. */}
+        {/* Collections, on the dark ground the design gives them.
+            This used to bleed to the viewport edge with a negative margin of
+            `calc((100vw - min(72rem,100vw))/2)`, which broke in two ways at
+            once when the page was widened. The 72rem was the old container
+            and no longer matched it, and `100vw` counts the vertical
+            scrollbar — so the band was pulled wider than the page and dragged
+            a horizontal scrollbar across the whole site with it.
+            A band the width of its container cannot do that. */}
         <section
           id="collections"
-          className="mb-16 scroll-mt-6 -mx-5 bg-primary px-5 py-12 md:-mx-[calc((100vw-min(72rem,100vw))/2)] md:px-[calc((100vw-min(72rem,100vw))/2)]"
+          className="mb-16 scroll-mt-6 -mx-5 bg-primary px-5 py-12 sm:mx-0 sm:rounded-sm sm:px-10"
         >
           <div className="mx-auto max-w-[1800px]">
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">

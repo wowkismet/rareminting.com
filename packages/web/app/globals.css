@@ -57,6 +57,21 @@
     color: var(--color-slate);
     font-family: var(--font-ui);
     -webkit-font-smoothing: antialiased;
+
+    /*
+     * A backstop, not a fix.
+     *
+     * One mis-measured full-bleed band was enough to put a horizontal
+     * scrollbar across every page and push the masthead off the left edge.
+     * The cause is fixed, but a single bad width anywhere can do it again,
+     * and the failure is both ugly and easy to ship without noticing.
+     *
+     * `clip` rather than `hidden` on purpose: `hidden` turns this into a
+     * scroll container and quietly kills every `position: sticky` on the
+     * site — the browse filter rail and the promotional column both rely on
+     * it. `clip` trims the overflow and leaves sticky alone.
+     */
+    overflow-x: clip;
   }
 
   h1,

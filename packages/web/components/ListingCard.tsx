@@ -35,7 +35,7 @@ export function ListingCard({
   const buyable = listing.state === 'minted';
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-sm border border-sand-line bg-sand-raised transition-colors hover:border-accent-deep/60">
+    <div className="@container relative flex h-full flex-col overflow-hidden rounded-sm border border-sand-line bg-sand-raised transition-colors hover:border-accent-deep/60">
       <a href={`/listing/${listing.id}`} className="flex flex-1 flex-col gap-2 p-4">
         {/* The title leads, above the photograph. A buyer scanning a grid
             reads what a thing is before deciding whether to look at it, and
@@ -122,7 +122,11 @@ export function ListingCard({
             Place a bid
           </a>
         ) : (
-          <div className="flex gap-2">
+          // Stacked on a narrow card, side by side when there is room. A
+          // container query rather than a screen breakpoint, because what
+          // decides this is how wide the *card* is — and that depends on the
+          // column count of whichever grid it is in, not on the window.
+          <div className="flex flex-col gap-2 @[13rem]:flex-row">
             <form action={addToCart} className="flex-1">
               <input type="hidden" name="listingId" value={listing.id} />
               <input type="hidden" name="from" value={fromPath} />

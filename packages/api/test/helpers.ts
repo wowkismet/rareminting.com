@@ -7,6 +7,17 @@ import { createApp, type App } from '../src/app.ts';
 import type { Database, Db } from '../src/db.ts';
 
 /**
+ * Auctions are paused on the live site, but the engine behind them still
+ * exists and still has to be tested -- pausing a feature is not the same as
+ * deleting it, and a suite that stopped exercising the bidding rules would
+ * quietly rot until the day somebody turned it back on.
+ *
+ * Set here rather than in the test script so it is visible to anyone reading
+ * the helpers, and so a test can unset it to check the pause itself.
+ */
+process.env["AUCTIONS_ENABLED"] = "true";
+
+/**
  * A test rig backed by real PostgreSQL.
  *
  * PGlite is PostgreSQL compiled to WASM, so constraints, triggers and SQL all

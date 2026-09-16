@@ -1,3 +1,4 @@
+import { auctionsEnabled } from '@rareminting/config';
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
@@ -321,6 +322,18 @@ export default async function EditListingPage({
             This listing is {isAuction ? 'an auction' : 'a fixed-price sale'}.
           </p>
 
+          {/* Paused. A listing that is already an auction can still be turned
+              back into a fixed-price sale — that is the direction out, and
+              blocking it would strand the four listings still in auction mode
+              with no way to sell them. What is refused is the way in. */}
+          {!auctionsEnabled() && !isAuction && (
+            <p className="mt-3 rounded-sm border border-sand-line bg-sand px-4 py-3 text-sm leading-relaxed text-slate-dim">
+              Auctions are paused, so a listing cannot be converted into one at the moment.
+              Everything already under the hammer is untouched.
+            </p>
+          )}
+
+          {(auctionsEnabled() || isAuction) && (
           <form action={setSaleMode} className="mt-4 flex flex-col gap-3">
             <input type="hidden" name="listingId" value={id} />
             <input type="hidden" name="saleMode" value={isAuction ? 'fixed' : 'auction'} />
@@ -357,6 +370,7 @@ export default async function EditListingPage({
               {isAuction ? 'Convert to a fixed-price sale' : 'Convert to an auction'}
             </button>
           </form>
+          )}
 
           {isAuction && (
             <p className="mt-4 border-t border-sand-line pt-4 text-sm text-slate-dim">

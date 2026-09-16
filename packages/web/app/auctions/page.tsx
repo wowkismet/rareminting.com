@@ -1,3 +1,4 @@
+import { auctionsEnabled } from '@rareminting/config';
 import type { Metadata } from 'next';
 
 import { BuyerFrame } from '@/components/BuyerFrame.tsx';
@@ -49,6 +50,37 @@ function timeLeft(endsAt: string): string {
 }
 
 export default async function AuctionsPage() {
+  // Paused. The page stays reachable rather than 404ing, because people have
+  // bid here before and some of them have it bookmarked — being told the
+  // auction house is shut is a better answer than being told it never existed.
+  if (!auctionsEnabled()) {
+    return (
+      <BuyerFrame current="/auctions" eyebrow="The Rostrum" title="Auctions are paused">
+        <div className="flex max-w-2xl flex-col gap-4">
+          <p className="leading-relaxed text-slate-dim">
+            We have stopped taking bids for the moment. Nothing that was bid on has been lost —
+            past auctions, their bids and the lots that sold through them are all still on record,
+            and anything you won is still in{' '}
+            <a href="/orders" className="text-accent-deep underline underline-offset-4">
+              your orders
+            </a>
+            .
+          </p>
+          <p className="leading-relaxed text-slate-dim">
+            Everything else is unaffected: the floor is open and every fixed-price note, coin and
+            piece is still for sale.
+          </p>
+          <a
+            href="/browse"
+            className="mt-2 self-start rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary"
+          >
+            Browse the floor
+          </a>
+        </div>
+      </BuyerFrame>
+    );
+  }
+
   const result = await api<{ auctions: AuctionSummary[] }>('/v1/auctions');
   const auctions = result.ok ? result.data.auctions : [];
 

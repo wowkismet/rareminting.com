@@ -1,3 +1,4 @@
+import { auctionsEnabled } from '@rareminting/config';
 import { signOut } from '@/app/actions.ts';
 import { api, type ApiUser } from '@/lib/api.ts';
 import { sessionToken } from '@/lib/session.ts';
@@ -25,7 +26,9 @@ const CATEGORIES = [
   { href: '/browse?kind=precious_stone', label: 'Precious stones' },
   { href: '/browse?kind=stamp', label: 'Collectibles' },
   { href: '/browse?kind=antique', label: 'Antiques' },
-  { href: '/auctions', label: 'Auctions' },
+  // Filtered out rather than deleted, so turning auctions back on restores
+  // the rail without anyone having to remember what was here.
+  ...(auctionsEnabled() ? [{ href: '/auctions', label: 'Auctions' }] : []),
 ] as const;
 
 /** What the dropdown beside the search box offers. */

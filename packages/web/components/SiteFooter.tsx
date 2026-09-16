@@ -1,4 +1,4 @@
-import { COMPANY, formattedAddress } from '@rareminting/config';
+import { auctionsEnabled, COMPANY, formattedAddress } from '@rareminting/config';
 
 /**
  * The site footer: every page, every policy, and who is behind the site.
@@ -16,7 +16,7 @@ const SECTIONS = [
     heading: 'Marketplace',
     links: [
       { href: '/browse', label: 'Buy notes' },
-      { href: '/auctions', label: 'Auctions' },
+      ...(auctionsEnabled() ? [{ href: '/auctions', label: 'Auctions' }] : []),
       { href: '/sell', label: 'Sell a note' },
       { href: '/orders', label: 'Your orders' },
     ],

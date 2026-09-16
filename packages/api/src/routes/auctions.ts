@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { Ctx, Router } from '../http.ts';
 import { json } from '../http.ts';
+import { auctionsEnabled } from '@rareminting/config';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../errors.ts';
 import { asObject, oneOf, optionalString, requiredString } from '../validate.ts';
 import { one, type Database, type Db } from '../db.ts';
@@ -151,6 +152,19 @@ export function registerAuctionRoutes(router: Router, database: Database): void 
    */
   router.add('POST', '/v1/listings/:id/auction', async (ctx) => {
     const seller = await requireApprovedSeller(ctx);
+
+    // Paused. The check is here as well as in the forms because hiding a
+    // button is not the same as closing a route: the mobile app still has its
+    // own copy of the UI, and anything holding a session can post here.
+    //
+    // Reading and bidding are deliberately left alone. Four bids from three
+    // bidders already exist, one auction was won and its listing is reserved
+    // against a buyer part-way through paying — blocking those would break a
+    // commitment rather than pause a feature.
+    if (!auctionsEnabled()) {
+      throw conflict('Auctions are paused. This listing can be sold at a fixed price instead.');
+    }
+
     const listingId = ctx.params['id'] ?? '';
     if (!/^[0-9a-f-]{36}$/i.test(listingId)) throw notFound('No such listing.');
 

@@ -18,6 +18,7 @@ import { asObject, oneOf, optionalString, requiredString } from '../validate.ts'
 import { PG_UNIQUE_VIOLATION, one, pgConstraint, pgErrorCode, type Database } from '../db.ts';
 import { requireApprovedSeller, requireSeller } from './sellers.ts';
 import { assertEditable, readListingPatch } from '../listing-edit.ts';
+import { auctionsEnabled } from '@rareminting/config';
 import { auditAll } from '../audit.ts';
 
 const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
@@ -584,6 +585,10 @@ export function registerListingRoutes(router: Router, database: Database): void 
       }
     }
     assertEditable(listing.state);
+
+    if (!auctionsEnabled() && mode === 'auction') {
+      throw conflict('Auctions are paused, so a listing cannot be converted into one.');
+    }
 
     if (listing.sale_mode === mode) {
       throw badRequest(`This listing is already ${mode === 'auction' ? 'an auction' : 'a fixed-price sale'}.`, {

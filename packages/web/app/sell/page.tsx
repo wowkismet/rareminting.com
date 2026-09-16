@@ -1,3 +1,4 @@
+import { auctionsEnabled } from '@rareminting/config';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
@@ -63,6 +64,14 @@ function SaleModeFields({
   suggestedStart: string;
   defaultMode: string;
 }) {
+  // Auctions are paused. Rather than offering a choice with one option, the
+  // whole block goes and the listing is a fixed-price sale — which is what a
+  // seller would have to pick anyway. The hidden field keeps the server
+  // receiving what it expects instead of relying on a default.
+  if (!auctionsEnabled()) {
+    return <input type="hidden" name="saleMode" value="fixed" />;
+  }
+
   return (
     <>
       <Select

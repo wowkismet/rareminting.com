@@ -1,3 +1,4 @@
+import { auctionsEnabled } from '@rareminting/config';
 import type { MenuSection } from '@/components/DashboardShell.tsx';
 
 /**
@@ -57,7 +58,7 @@ export function unifiedMenu({
         { href: '/cart', label: 'Cart', badge: counts.cart },
         { href: '/saved', label: 'Wishlist', badge: counts.saved },
         { href: '/browse', label: 'Find a date' },
-        { href: '/auctions', label: 'Auctions' },
+        ...(auctionsEnabled() ? [{ href: '/auctions', label: 'Auctions' }] : []),
       ],
     },
     {
@@ -67,7 +68,7 @@ export function unifiedMenu({
             { href: '/seller', label: 'Sales overview' },
             { href: '/sell', label: 'Add a listing' },
             { href: '/seller/items', label: 'My listings', badge: counts.listings },
-            { href: '/seller/auctions', label: 'My auctions' },
+            ...(auctionsEnabled() ? [{ href: '/seller/auctions', label: 'My auctions' }] : []),
             { href: '/seller/payouts', label: 'Earnings' },
             { href: '/seller/returns', label: 'Returns', badge: counts.returns },
             { href: '/seller/reviews', label: 'Reviews', badge: counts.reviews },

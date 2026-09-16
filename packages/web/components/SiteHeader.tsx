@@ -80,7 +80,7 @@ export async function SiteHeader({
     <header>
       {/* Utility strip */}
       <div className="border-b border-line/40 bg-ink">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-center gap-x-6 gap-y-1 px-5 py-2 sm:justify-between">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-center gap-x-6 gap-y-1 px-5 py-2 sm:justify-between xl:px-10">
           <span aria-hidden className="hidden w-40 sm:block" />
           <p className="font-display text-xs italic text-accent">
             ◈ Where numbers &amp; rare become heirlooms. ◈
@@ -101,8 +101,13 @@ export async function SiteHeader({
 
       {/* Wordmark, search, account */}
       <div className="bg-primary">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-8 gap-y-4 px-5 py-4">
-          <a href="/" aria-label="Rare Minting home" className="shrink-0">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-8 gap-y-4 px-5 py-4 xl:px-10">
+          {/* The wordmark and the account group both take an equal share of
+              whatever is left over, which is what puts the search box in the
+              true centre of the header rather than merely somewhere between
+              the two. `shrink-0` alongside it stops either side collapsing
+              below its own content to get there. */}
+          <a href="/" aria-label="Rare Minting home" className="shrink-0 lg:flex-1">
             <Wordmark size={compact ? 'sm' : 'md'} />
           </a>
 
@@ -111,11 +116,11 @@ export async function SiteHeader({
             action="/browse"
             method="get"
             role="search"
-            // Capped rather than filling the row. On the widened page `flex-1`
-            // stretched the box to well over a thousand pixels, which is far
-            // more than a serial number needs and left the search looking like
-            // the main event rather than a tool beside the wordmark.
-            className="order-3 flex min-w-0 flex-1 items-stretch md:order-none lg:max-w-xl xl:max-w-2xl"
+            // Below lg it still fills its own row, because on a narrow screen
+            // a centred box with nothing beside it is just a narrow box. From
+            // lg it takes a fixed width and stops growing, so the flexible
+            // space either side of it stays equal and it sits in the middle.
+            className="order-3 flex min-w-0 flex-1 items-stretch md:order-none lg:w-[28rem] lg:flex-none xl:w-[38rem] 2xl:w-[44rem]"
           >
             <label htmlFor="scope" className="sr-only">
               Category to search
@@ -160,7 +165,7 @@ export async function SiteHeader({
             </button>
           </form>
 
-          <div className="ml-auto flex shrink-0 items-center gap-6">
+          <div className="ml-auto flex shrink-0 items-center gap-6 lg:ml-0 lg:flex-1 lg:justify-end">
             {user !== null && (
               <a href="/saved" className={action}>
                 <span className="relative">
@@ -251,7 +256,7 @@ export async function SiteHeader({
           electric-blue bar across the full width would shout louder than
           anything on the page under it. Header now reads ink, navy, ink. */}
       <div className="border-t border-line/40 bg-ink">
-        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3 xl:px-10">
           <a
             href="/browse"
             className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-accent-bright"

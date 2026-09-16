@@ -111,7 +111,11 @@ export async function SiteHeader({
             action="/browse"
             method="get"
             role="search"
-            className="order-3 flex min-w-0 flex-1 items-stretch md:order-none"
+            // Capped rather than filling the row. On the widened page `flex-1`
+            // stretched the box to well over a thousand pixels, which is far
+            // more than a serial number needs and left the search looking like
+            // the main event rather than a tool beside the wordmark.
+            className="order-3 flex min-w-0 flex-1 items-stretch md:order-none lg:max-w-xl xl:max-w-2xl"
           >
             <label htmlFor="scope" className="sr-only">
               Category to search

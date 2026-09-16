@@ -21,10 +21,10 @@
 export function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const scale =
     size === 'lg'
-      ? 'text-3xl sm:text-5xl'
+      ? 'text-4xl sm:text-6xl'
       : size === 'sm'
-        ? 'text-lg sm:text-xl'
-        : 'text-xl sm:text-2xl';
+        ? 'text-xl sm:text-2xl'
+        : 'text-2xl sm:text-3xl';
 
   return (
     <span

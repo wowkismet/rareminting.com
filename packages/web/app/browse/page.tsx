@@ -82,12 +82,21 @@ export default async function BrowsePage({
   // The catalogue tree, alongside the listings rather than after them. Cached
   // briefly: it changes when staff edit it, which is rarely, and it is on
   // every view of the floor.
-  const [result, categoryResult] = await Promise.all([
+  //
+  // The promotional banner is fetched here as well as inside BannerSlot, and
+  // for a reason the component cannot solve on its own: it renders nothing
+  // when the slot is empty, but its column had already been reserved by the
+  // grid — so an empty slot left a fifteen-rem strip of dead space down the
+  // right of the page. Knowing here whether there is anything to show is what
+  // lets the column not exist at all. Both calls share a cache entry.
+  const [result, categoryResult, bannerResult] = await Promise.all([
     api<{ listings: ApiListing[] } & { exact?: ApiListing[]; dayMonth?: ApiListing[] }>(path),
     api<{ categories: FilterCategory[] }>('/v1/categories', { revalidate: 300 }),
+    api<{ banners: unknown[] }>('/v1/banners?slot=browse_side', { revalidate: 60 }),
   ]);
 
   const categories = categoryResult.ok ? categoryResult.data.categories : [];
+  const hasPromo = bannerResult.ok && bannerResult.data.banners.length > 0;
 
   const exact = result.ok ? (result.data.exact ?? []) : [];
   const near = result.ok ? (result.data.dayMonth ?? []) : [];
@@ -123,11 +132,19 @@ export default async function BrowsePage({
       <div className="flex flex-col gap-8">
         <BannerSlot slot="browse" />
 
-        {/* Three columns on a wide screen: filters, the floor, promotions.
-            The rails collapse away below `lg` rather than stacking a filter
-            panel and an advert on top of the grid — on a phone the listings
-            are what the buyer came for, and the filters open from the top. */}
-        <div className="flex flex-col gap-8 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)_15rem] lg:items-start">
+        {/* Filters, the floor, and promotions where there are any.
+            The third column exists only when a banner is actually scheduled:
+            reserving it for an empty slot left a strip of dead space down the
+            right of every view of the floor. The rails collapse away below
+            `lg` rather than stacking a filter panel and an advert on top of
+            the grid — on a phone the listings are what the buyer came for. */}
+        <div
+          className={`flex flex-col gap-8 lg:grid lg:items-start ${
+            hasPromo
+              ? 'lg:grid-cols-[15rem_minmax(0,1fr)_15rem]'
+              : 'lg:grid-cols-[15rem_minmax(0,1fr)]'
+          }`}
+        >
           <aside className="lg:sticky lg:top-6">
             <BrowseFilters
               kind={kind}
@@ -201,12 +218,12 @@ export default async function BrowsePage({
         )}
           </div>
 
-          {/* The promotional rail. Whatever an admin has put in the slot, and
-              nothing at all when the slot is empty — an advertising column
-              holding a placeholder is worse than one that is not there. */}
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
-            <BannerSlot slot="browse_side" />
-          </aside>
+          {/* The promotional rail, only when there is something in it. */}
+          {hasPromo && (
+            <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+              <BannerSlot slot="browse_side" />
+            </aside>
+          )}
         </div>
       </div>
     </BuyerFrame>

@@ -308,7 +308,7 @@ export default async function Home({
       <div className="note-field guilloche">
         <div aria-hidden className="note-field-image" />
         <div aria-hidden className="note-field-fade" />
-        <div className="mx-auto max-w-6xl px-5">
+        <div className="mx-auto max-w-[1800px] px-5 xl:px-10">
           <header className="flex flex-col items-center gap-3 pt-6">
             <p className="font-display text-sm italic text-cream-dim">
               Where numbers become heirlooms.
@@ -401,7 +401,7 @@ export default async function Home({
         </div>
 
         <div className="border-t border-line/70 bg-ink/40">
-          <div className="mx-auto grid max-w-6xl gap-px bg-line/40 px-0 sm:grid-cols-3">
+          <div className="mx-auto grid max-w-[1800px] gap-px bg-line/40 px-0 sm:grid-cols-3">
             {(
               [
                 ['◎', String(total), total === 1 ? 'Note for sale' : 'Notes for sale'],
@@ -429,7 +429,7 @@ export default async function Home({
       </div>
 
       {/* ---------- Light zone ---------- */}
-      <main className="mx-auto max-w-6xl px-5 py-16">
+      <main className="mx-auto max-w-[1800px] px-5 xl:px-10 py-16">
         {/* Whatever staff have scheduled. Renders nothing when empty, so there
             is no gap on a day with no promotion running. */}
         <BannerSlot slot="home_hero" className="mb-16" />
@@ -489,7 +489,7 @@ export default async function Home({
                   <span className="text-accent-deep">Exact matches.</span> The serial reads as your
                   date, digit for digit.
                 </p>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
                   {results.exact.map((listing) => (
                     <ListingCard key={listing.id} listing={listing} badge="Exact" />
                   ))}
@@ -519,7 +519,7 @@ export default async function Home({
                   <span className="text-slate">Same day and month,</span> a different year. The near
                   misses collectors often prefer.
                 </p>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
                   {results.dayMonth.slice(0, 6).map((listing) => (
                     <ListingCard key={listing.id} listing={listing} badge="Near" />
                   ))}
@@ -565,7 +565,7 @@ export default async function Home({
                   somebody scrolling the floor meets it. Split into two grids
                   rather than spanning a column, which keeps it full width
                   whatever the breakpoint. */}
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
                 {listings.slice(0, 5).map((listing) => (
                   <ListingCard
                     key={listing.id}
@@ -583,7 +583,7 @@ export default async function Home({
               <BannerSlot slot="home_mid" className="mb-8" />
 
               {listings.length > 5 && (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
                   {listings.slice(5).map((listing) => (
                     <ListingCard
                       key={listing.id}
@@ -638,7 +638,7 @@ export default async function Home({
           id="collections"
           className="mb-16 scroll-mt-6 -mx-5 bg-primary px-5 py-12 md:-mx-[calc((100vw-min(72rem,100vw))/2)] md:px-[calc((100vw-min(72rem,100vw))/2)]"
         >
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-[1800px]">
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent">
               Collections worth having
             </p>

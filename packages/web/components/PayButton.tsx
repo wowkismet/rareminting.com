@@ -108,7 +108,7 @@ export function PayButton({
         name: 'Rare Minting',
         description: `Order ${body.orderNumber}`,
         prefill: { name: buyerName ?? '', email: buyerEmail },
-        theme: { color: '#1a4a2e' },
+        theme: { color: '#071a2b' },
         handler: async (response: RazorpayResponse) => {
           await fetch('/pay/callback', {
             method: 'POST',

@@ -44,7 +44,7 @@ export async function BuyerFrame({
     return (
       <div>
         <SiteHeader user={null} compact={compactHeader} />
-        <main className="mx-auto flex max-w-6xl flex-col gap-10 px-5 py-14">{children}</main>
+        <main className="mx-auto flex max-w-[1800px] flex-col gap-10 px-5 py-14 xl:px-10">{children}</main>
         <SiteFooter />
       </div>
     );

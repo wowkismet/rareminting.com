@@ -130,16 +130,16 @@ export default async function SellerDashboardPage() {
                   .map((k, i) => ({
                     label: KIND_LABEL[k.kind] ?? 'Other collectibles',
                     value: k.inr,
-                    colour: ['#1a4a2e', '#c9a84c', '#1a4a46'][i % 3] as string,
+                    colour: ['#071a2b', '#20c4f4', '#0b5cff'][i % 3] as string,
                   }))}
               />
             ) : (
               <>
                 <CategoryDonut
                   slices={[
-                    { label: 'Banknotes', value: stats.byKind.notes, colour: '#1a4a2e' },
-                    { label: 'Coins', value: stats.byKind.coins, colour: '#c9a84c' },
-                    { label: 'Other collectibles', value: stats.byKind.other, colour: '#1a4a46' },
+                    { label: 'Banknotes', value: stats.byKind.notes, colour: '#071a2b' },
+                    { label: 'Coins', value: stats.byKind.coins, colour: '#20c4f4' },
+                    { label: 'Other collectibles', value: stats.byKind.other, colour: '#0b5cff' },
                   ]}
                 />
                 <p className="mt-3 text-xs text-slate-dim">

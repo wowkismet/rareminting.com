@@ -2,27 +2,37 @@
 
 @theme {
   /* ---- Brand palette. Supplied values, used verbatim. ----
-     Exposed across the site as bg-primary / bg-secondary / text-accent etc. */
-  --color-primary: #1a4a2e;         /* deep forest green */
-  --color-secondary: #1a4a46;       /* deep teal */
-  --color-accent: #c9a84c;          /* antique gold */
+     Exposed across the site as bg-primary / bg-secondary / text-accent etc.
+
+     The token *names* are historical — they were coined when the site was
+     green and gold, and "sand" and "cream" no longer describe what they hold.
+     They are kept because they are used in several hundred places and renaming
+     them would be a large, risky diff for no behavioural gain. What each one
+     means structurally has not changed: ink is the deepest ground, primary the
+     main dark surface, sand the page, sand-raised the cards on it.
+
+     Every pair below was checked against WCAG AA before being adopted; the
+     ratios in the comments are measured, not estimated. */
+  --color-primary: #071a2b;         /* dark navy — masthead, footer, buttons */
+  --color-secondary: #0b5cff;       /* electric blue — the CTA, and button hover */
+  --color-accent: #20c4f4;          /* cyan — 8.6:1 on primary */
 
   /* ---- Dark zone: masthead, hero, footer, serial plates. ---- */
-  --color-ink: #0a1f14;             /* deepest ground, the primary pushed down */
-  --color-line: #2d6045;            /* hairlines on green */
-  --color-cream: #f3ede1;           /* body text on green */
-  --color-cream-dim: #a9c0b0;       /* 5.3:1 on primary */
-  --color-accent-bright: #e3c887;   /* 6.2:1 on primary — small gold labels */
+  --color-ink: #04101c;             /* deepest ground, the navy pushed down */
+  --color-line: #1b3a57;            /* hairlines on navy */
+  --color-cream: #ffffff;           /* body text on navy — 17.6:1 */
+  --color-cream-dim: #9cb3c9;       /* 8.1:1 on primary */
+  --color-accent-bright: #7ddcfb;   /* 11.3:1 on primary — small cyan labels */
 
   /* ---- Light zone: the catalogue body. ---- */
-  --color-sand: #ede4d3;            /* page surface */
-  --color-sand-raised: #f7f2e8;     /* cards sitting on sand */
-  --color-sand-line: #d9cdb6;       /* hairlines on sand */
-  --color-slate: #0d2418;           /* headings and body text on sand */
-  --color-slate-dim: #55665c;       /* 4.8:1 on sand */
-  --color-accent-deep: #7a6224;     /* 4.7:1 on sand — gold that survives on cream */
+  --color-sand: #ffffff;            /* page surface */
+  --color-sand-raised: #f5f8fc;     /* cards sitting on the page */
+  --color-sand-line: #dde3ea;       /* hairlines and card borders */
+  --color-slate: #101828;           /* headings and body text — 17.8:1 */
+  --color-slate-dim: #667085;       /* paragraphs — 5.0:1 on white, 4.7:1 on a card */
+  --color-accent-deep: #0b5cff;     /* links and labels — 5.3:1 on white */
 
-  --color-ember: #cf7250;           /* star marker: warm, legible on green */
+  --color-ember: #d92d20;           /* errors and the star marker — 4.8:1 on white */
 
   /* Faces resolve to next/font's self-hosted families, with real fallbacks. */
   --font-display: var(--font-playfair), Georgia, 'Times New Roman', serif;

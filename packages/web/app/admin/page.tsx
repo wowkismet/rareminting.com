@@ -42,7 +42,7 @@ interface AdminOverview {
 
 const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
 
-const SLICE_COLOURS = ['#1a4a2e', '#1a4a46', '#c9a84c', '#8b7355', '#d3d3d3'] as const;
+const SLICE_COLOURS = ['#071a2b', '#0b5cff', '#20c4f4', '#667085', '#dde3ea'] as const;
 
 /** A measured period-on-period change, or nothing at all. */
 function pctHint(pct: number | null): string | undefined {
@@ -191,12 +191,12 @@ export default async function AdminDashboardPage() {
                 <svg viewBox="0 0 800 200" className="h-40 w-full" role="img" aria-label="Sales over the last thirty days">
                   <defs>
                     <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" style={{ stopColor: '#c9a84c', stopOpacity: 0.3 }} />
-                      <stop offset="100%" style={{ stopColor: '#c9a84c', stopOpacity: 0 }} />
+                      <stop offset="0%" style={{ stopColor: '#20c4f4', stopOpacity: 0.3 }} />
+                      <stop offset="100%" style={{ stopColor: '#20c4f4', stopOpacity: 0 }} />
                     </linearGradient>
                   </defs>
                   <polygon points={`0,200 ${chart} 800,200`} fill="url(#gradient)" />
-                  <polyline points={chart} fill="none" stroke="#c9a84c" strokeWidth="2" />
+                  <polyline points={chart} fill="none" stroke="#20c4f4" strokeWidth="2" />
                 </svg>
               )}
             </div>

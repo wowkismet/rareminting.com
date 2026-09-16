@@ -56,9 +56,9 @@ export default async function SellerAnalyticsPage() {
           <Panel title="What you list">
             <CategoryDonut
               slices={[
-                { label: 'Banknotes', value: stats.byKind.notes, colour: '#1a4a2e' },
-                { label: 'Coins', value: stats.byKind.coins, colour: '#c9a84c' },
-                { label: 'Other collectibles', value: stats.byKind.other, colour: '#1a4a46' },
+                { label: 'Banknotes', value: stats.byKind.notes, colour: '#071a2b' },
+                { label: 'Coins', value: stats.byKind.coins, colour: '#20c4f4' },
+                { label: 'Other collectibles', value: stats.byKind.other, colour: '#0b5cff' },
               ]}
             />
           </Panel>

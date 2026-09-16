@@ -35,7 +35,7 @@ interface Overview {
   }[];
 }
 
-const COLOURS = ['#1a4a2e', '#1a4a46', '#c9a84c', '#8b7355', '#d3d3d3'];
+const COLOURS = ['#071a2b', '#0b5cff', '#20c4f4', '#667085', '#dde3ea'];
 
 function pct(p: number | null): string {
   return p === null ? 'no earlier period to compare' : `${p >= 0 ? '▲' : '▼'} ${Math.abs(p)}%`;

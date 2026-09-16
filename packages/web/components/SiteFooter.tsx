@@ -51,7 +51,7 @@ const SECTIONS = [
 export function SiteFooter({ noteCount }: { noteCount?: number | undefined }) {
   return (
     <footer className="bg-primary">
-      <div className="mx-auto max-w-6xl px-5 py-14">
+      <div className="mx-auto max-w-[1800px] px-5 xl:px-10 py-14">
         <nav
           aria-label="Footer"
           className="grid gap-8 border-b border-line pb-10 sm:grid-cols-2 lg:grid-cols-4"

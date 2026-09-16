@@ -24,8 +24,8 @@ export default function GlobalError({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#ede4d3',
-          color: '#0d2418',
+          backgroundColor: '#ffffff',
+          color: '#101828',
           fontFamily: 'Georgia, "Times New Roman", serif',
           padding: '2rem',
           textAlign: 'center',
@@ -38,7 +38,7 @@ export default function GlobalError({
               fontSize: '0.625rem',
               letterSpacing: '0.3em',
               textTransform: 'uppercase',
-              color: '#7a6224',
+              color: '#0b5cff',
               margin: 0,
             }}
           >
@@ -49,7 +49,7 @@ export default function GlobalError({
             The site did not load
           </h1>
 
-          <p style={{ color: '#55665c', lineHeight: 1.6, fontSize: '0.9rem' }}>
+          <p style={{ color: '#667085', lineHeight: 1.6, fontSize: '0.9rem' }}>
             This is our fault rather than yours. Nothing you were part-way through has been lost —
             orders, bids and saved items are stored as they are made.
           </p>
@@ -69,8 +69,8 @@ export default function GlobalError({
               style={{
                 borderRadius: '999px',
                 border: 'none',
-                backgroundColor: '#1a4a2e',
-                color: '#f3ede1',
+                backgroundColor: '#071a2b',
+                color: '#ffffff',
                 padding: '0.7rem 1.75rem',
                 fontSize: '0.875rem',
                 cursor: 'pointer',
@@ -83,9 +83,9 @@ export default function GlobalError({
               onClick={reset}
               style={{
                 borderRadius: '999px',
-                border: '1px solid #d9cdb6',
+                border: '1px solid #dde3ea',
                 backgroundColor: 'transparent',
-                color: '#0d2418',
+                color: '#101828',
                 padding: '0.7rem 1.75rem',
                 fontSize: '0.875rem',
                 cursor: 'pointer',
@@ -101,7 +101,7 @@ export default function GlobalError({
                 marginTop: '2rem',
                 fontFamily: 'ui-monospace, Consolas, monospace',
                 fontSize: '0.7rem',
-                color: '#55665c',
+                color: '#667085',
               }}
             >
               If you report this, quote {error.digest}

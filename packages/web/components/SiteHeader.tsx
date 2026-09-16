@@ -80,7 +80,7 @@ export async function SiteHeader({
     <header>
       {/* Utility strip */}
       <div className="border-b border-line/40 bg-ink">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-6 gap-y-1 px-5 py-2 sm:justify-between">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-center gap-x-6 gap-y-1 px-5 py-2 sm:justify-between">
           <span aria-hidden className="hidden w-40 sm:block" />
           <p className="font-display text-xs italic text-accent">
             ◈ Where numbers &amp; rare become heirlooms. ◈
@@ -101,7 +101,7 @@ export async function SiteHeader({
 
       {/* Wordmark, search, account */}
       <div className="bg-primary">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-4 px-5 py-4">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-8 gap-y-4 px-5 py-4">
           <a href="/" aria-label="Rare Minting home" className="shrink-0">
             <Wordmark size={compact ? 'sm' : 'md'} />
           </a>
@@ -243,8 +243,11 @@ export async function SiteHeader({
       </div>
 
       {/* Category rail */}
-      <div className="border-t border-line/40 bg-secondary">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
+      {/* The rail returns to the deepest ground rather than the CTA blue: an
+          electric-blue bar across the full width would shout louder than
+          anything on the page under it. Header now reads ink, navy, ink. */}
+      <div className="border-t border-line/40 bg-ink">
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
           <a
             href="/browse"
             className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-accent-bright"

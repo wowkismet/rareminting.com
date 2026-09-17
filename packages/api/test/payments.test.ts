@@ -218,18 +218,50 @@ describe('signature checking', () => {
     assert.equal(webhookSignatureValid(config, timestamp, raw, bodyOnly), false);
   });
 
-  it('refuses a signature that is old, however well formed', () => {
+  it('reads the timestamp in seconds or in milliseconds', () => {
+    // Cashfree's documentation says seconds; production sends milliseconds.
+    // Supporting only one is a silent, total failure — the age check throws
+    // every webhook out before the signature is even computed, orders stop
+    // being marked paid, and the dashboard reports everything as delivered.
+    // This is exactly what happened on the first live payment.
     const config = cashfreeConfig()!;
     const raw = '{"a":1}';
-    const old = String(Math.floor(Date.now() / 1000) - 3600);
-    const signature = createHmac('sha256', SECRET).update(`${old}${raw}`, 'utf8').digest('base64');
 
-    assert.equal(webhookSignatureValid(config, old, raw, signature), false);
-    // ...and is accepted when the clock is wound back to when it was sent.
-    assert.equal(
-      webhookSignatureValid(config, old, raw, signature, { now: Number(old) * 1000 }),
-      true,
-    );
+    for (const ts of [String(Math.floor(Date.now() / 1000)), String(Date.now())]) {
+      const signature = createHmac('sha256', SECRET).update(`${ts}${raw}`, 'utf8').digest('base64');
+      assert.equal(
+        webhookSignatureValid(config, ts, raw, signature),
+        true,
+        `a ${ts.length}-digit timestamp was rejected`,
+      );
+    }
+  });
+
+  it('accepts a retry hours later, because that is what retries are for', () => {
+    // Cashfree backs its retries off over hours, so a tight age window rejects
+    // precisely the deliveries meant to rescue a lost notification. Replay
+    // protection buys little in exchange: applyPaymentEvent is idempotent, so
+    // replaying a genuine event changes nothing, and forging one still needs
+    // the secret.
+    const config = cashfreeConfig()!;
+    const raw = '{"a":1}';
+    const hoursAgo = String(Math.floor(Date.now() / 1000) - 6 * 3600);
+    const signature = createHmac('sha256', SECRET)
+      .update(`${hoursAgo}${raw}`, 'utf8')
+      .digest('base64');
+
+    assert.equal(webhookSignatureValid(config, hoursAgo, raw, signature), true);
+  });
+
+  it('still refuses one from last week', () => {
+    const config = cashfreeConfig()!;
+    const raw = '{"a":1}';
+    const ancient = String(Math.floor(Date.now() / 1000) - 7 * 24 * 3600);
+    const signature = createHmac('sha256', SECRET)
+      .update(`${ancient}${raw}`, 'utf8')
+      .digest('base64');
+
+    assert.equal(webhookSignatureValid(config, ancient, raw, signature), false);
   });
 
   it('rejects a malformed signature or timestamp without throwing', () => {
@@ -312,13 +344,53 @@ describe('the webhook', () => {
     assert.equal(res.status, 401);
   });
 
-  it('refuses a replay from an hour ago', async () => {
+  it('acts on a retry that arrives an hour late', async () => {
+    // The rescue case, and the reason the age window is a day rather than five
+    // minutes: the buyer paid, the first notification was lost, and Cashfree
+    // is trying again. Refusing this leaves somebody out of pocket with an
+    // order that says they still owe money.
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
+    );
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
+    const anHourAgo = String(Math.floor(Date.now() / 1000) - 3600);
+
+    const res = await webhook(successEvent(gatewayOrderId, amount), { timestamp: anHourAgo });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { received: true, acted: true });
+    assert.equal(await orderState(orderId), 'paid');
+  });
+
+  it('accepts the millisecond timestamps production actually sends', async () => {
+    // The first live payment on this integration went through and every
+    // webhook for it was rejected, because the code assumed seconds. The money
+    // was only applied because the buyer happened to land back on the page and
+    // trigger a reconcile.
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
+    );
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
+
+    const res = await webhook(successEvent(gatewayOrderId, amount), {
+      timestamp: String(Date.now()),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(await orderState(orderId), 'paid');
+  });
+
+  it('still refuses a signed body from last week', async () => {
     const { orderId } = await orderFor();
     const gatewayOrderId = await fakeGatewayOrder(orderId, 456_000);
-    const old = String(Math.floor(Date.now() / 1000) - 3600);
+    const lastWeek = String(Math.floor(Date.now() / 1000) - 7 * 24 * 3600);
 
     const before = await orderState(orderId);
-    const res = await webhook(successEvent(gatewayOrderId, 456_000), { timestamp: old });
+    const res = await webhook(successEvent(gatewayOrderId, 456_000), { timestamp: lastWeek });
     assert.equal(res.status, 401);
     assert.equal(await orderState(orderId), before, 'a stale replay must move nothing');
   });

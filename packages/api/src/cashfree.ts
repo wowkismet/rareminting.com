@@ -111,34 +111,85 @@ function digestsMatch(a: string, b: string): boolean {
 }
 
 /**
+ * `x-webhook-timestamp` as milliseconds, or null if it is not a timestamp.
+ *
+ * Cashfree has been observed sending this in milliseconds, and its own
+ * documentation and SDK samples show seconds. Both are accepted rather than
+ * one being guessed at: the two are unambiguous by magnitude, since a seconds
+ * value for any plausible date is around 1.7e9 and a milliseconds one around
+ * 1.7e12, a thousandfold apart with no date this side of the year 5138 able to
+ * close the gap.
+ *
+ * Getting this wrong is silent and total — every webhook fails the age check,
+ * the signature is never even computed, and orders quietly stop being marked
+ * paid while the gateway says everything was delivered.
+ */
+function timestampMillis(timestamp: string): number | null {
+  if (!/^\d{1,15}$/.test(timestamp)) return null;
+  const value = Number(timestamp);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value > 1e11 ? value : value * 1000;
+}
+
+/**
+ * How stale a webhook may be and still be acted on.
+ *
+ * A day, which is deliberately generous, because the thing this window is
+ * protecting against is not worth much and the thing it breaks is.
+ *
+ * Replaying a captured webhook achieves nothing: `applyPaymentEvent` is
+ * idempotent, so a second delivery of a real event changes nothing, and an
+ * attacker cannot mint a new one without the secret. Rejecting a late delivery,
+ * on the other hand, throws away exactly the retries that exist to save a
+ * payment whose first notification was lost — and Cashfree backs its retries
+ * off over hours. A tight window here does not harden the endpoint; it disarms
+ * the safety net.
+ */
+const MAX_WEBHOOK_AGE_SECONDS = 24 * 60 * 60;
+
+/**
  * The signature on a webhook.
  *
  * Base64 HMAC-SHA256 of `timestamp + rawBody`, keyed by the API secret. The
  * raw body matters: re-serialising the JSON would renumber `170.00` as `170`
  * and the signature would never match again.
- *
- * The timestamp is also checked for age. Without that, a signed body captured
- * once could be replayed at any point in the future — and while
- * `applyPaymentEvent` is idempotent and would do nothing the second time, a
- * replay window is not something to leave open on a payment endpoint.
  */
 export function webhookSignatureValid(
   config: CashfreeConfig,
   timestamp: string,
   rawBody: string,
   signature: string,
-  { toleranceSeconds = 300, now = Date.now() }: { toleranceSeconds?: number; now?: number } = {},
+  {
+    toleranceSeconds = MAX_WEBHOOK_AGE_SECONDS,
+    now = Date.now(),
+  }: { toleranceSeconds?: number; now?: number } = {},
 ): boolean {
-  // Cashfree sends seconds since the epoch. Anything else is not from them.
-  if (!/^\d{1,15}$/.test(timestamp)) return false;
-  const sentAt = Number(timestamp) * 1000;
-  if (!Number.isFinite(sentAt)) return false;
-  if (Math.abs(now - sentAt) > toleranceSeconds * 1000) return false;
+  const sentAt = timestampMillis(timestamp);
+  if (sentAt === null) return false;
+  if (Math.abs(now - sentAt) > toleranceSeconds * 1000) {
+    console.error(
+      `[cashfree] webhook rejected on age: timestamp ${timestamp}, ${Math.round(
+        Math.abs(now - sentAt) / 1000,
+      )}s adrift`,
+    );
+    return false;
+  }
 
+  // Signed over the header exactly as it arrived, not over the parsed number —
+  // "1700000000000" and 1700000000000 are the same value and different bytes.
   const expected = createHmac('sha256', config.secretKey)
     .update(`${timestamp}${rawBody}`, 'utf8')
     .digest('base64');
-  return digestsMatch(expected, signature);
+
+  const ok = digestsMatch(expected, signature);
+  if (!ok) {
+    // Enough to tell a mangled secret from a mangled body next time, without
+    // putting either in the log.
+    console.error(
+      `[cashfree] webhook signature mismatch: timestamp ${timestamp}, body ${rawBody.length} bytes`,
+    );
+  }
+  return ok;
 }
 
 /* ----------------------------- errors ----------------------------- */

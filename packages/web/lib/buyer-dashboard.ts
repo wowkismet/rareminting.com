@@ -56,6 +56,15 @@ export interface BasketItem {
   addedAt: string;
   available: boolean;
   note?: string;
+  /** What was chosen for this line. `code` null means no frame. */
+  frame?: {
+    code: string | null;
+    photoUrl: string | null;
+    message: string | null;
+    recipient: string | null;
+    sender: string | null;
+    occasionOn: string | null;
+  };
 }
 
 export interface BasketResponse {

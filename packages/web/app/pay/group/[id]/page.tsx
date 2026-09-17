@@ -20,6 +20,7 @@ interface Group {
     deliveryInr: number;
     insuranceInr: number;
     giftPackingInr: number;
+    frameInr: number;
     discountInr: number;
     totalInr: number;
     placedAt: string | null;
@@ -158,6 +159,7 @@ export default async function PayGroupPage({ params }: { params: Promise<{ id: s
                 ['Delivery', group.deliveryInr, false],
                 ['Insurance', group.insuranceInr, false],
                 ['Gift packaging', group.giftPackingInr, false],
+                ['Framing', group.frameInr, false],
                 ['Discount', -group.discountInr, true],
               ] as const
             )

@@ -32,6 +32,13 @@ interface BasketRow {
   denomination: number | null;
   thumb: string | null;
   seller_name: string;
+  // Null on every saved item, and on any cart line without a frame.
+  frame_code: string | null;
+  frame_photo_key: string | null;
+  frame_message: string | null;
+  frame_recipient: string | null;
+  frame_sender: string | null;
+  frame_occasion_on: string | null;
 }
 
 function shape(row: BasketRow): Record<string, unknown> {
@@ -50,13 +57,38 @@ function shape(row: BasketRow): Record<string, unknown> {
     // The one thing the buyer needs to know per line.
     available: row.state === BUYABLE,
     ...(row.note === null ? {} : { note: row.note }),
+    // What was chosen for this line, if anything. The photograph is handed
+    // back as the authenticated route rather than a path, because it is not
+    // served from anywhere a plain URL would reach.
+    frame: {
+      code: row.frame_code ?? null,
+      photoUrl: row.frame_photo_key === null ? null : `/v1/gift-photo/${row.frame_photo_key}`,
+      message: row.frame_message ?? null,
+      recipient: row.frame_recipient ?? null,
+      sender: row.frame_sender ?? null,
+      occasionOn: row.frame_occasion_on ?? null,
+    },
   };
 }
 
 /** The shared select. `table` is a literal, never user input. */
 function listQuery(table: 'cart_items' | 'saved_items'): string {
   const noteColumn = table === 'saved_items' ? 'c.note' : 'null::text as note';
+
+  // A frame only ever hangs off a cart line. Saved items have none, so the
+  // columns come back as nulls there rather than the two queries diverging
+  // into different shapes the caller would have to tell apart.
+  const cart = table === 'cart_items';
+  const frameColumns = cart
+    ? `f.code as frame_code, c.frame_photo_key, c.frame_message,
+       c.frame_recipient, c.frame_sender, c.frame_occasion_on::text as frame_occasion_on`
+    : `null::text as frame_code, null::text as frame_photo_key, null::text as frame_message,
+       null::text as frame_recipient, null::text as frame_sender,
+       null::text as frame_occasion_on`;
+  const frameJoin = cart ? 'left join frame_templates f on f.id = c.frame_template_id' : '';
+
   return `select c.listing_id, c.added_at::text as added_at, ${noteColumn},
+                 ${frameColumns},
                  l.title, l.state, l.sale_mode, l.price_paise::text as price_paise, l.grade,
                  n.serial_digits, n.denomination,
                  (select m.storage_key from media m
@@ -66,6 +98,7 @@ function listQuery(table: 'cart_items' | 'saved_items'): string {
             join listings l on l.id = c.listing_id
             join sellers s on s.id = l.seller_id
             left join notes n on n.listing_id = l.id
+            ${frameJoin}
            where c.buyer_id = $1
            order by c.added_at desc
            limit 200`;

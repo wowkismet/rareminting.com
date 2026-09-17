@@ -50,6 +50,8 @@ export interface ChargeInput {
   sellerCount: number;
   wantsInsurance: boolean;
   wantsGiftPacking: boolean;
+  /** Total of the frames chosen on individual lines, in paise. */
+  framePaise?: number;
 }
 
 export interface Charges {
@@ -57,6 +59,8 @@ export interface Charges {
   deliveryPaise: number;
   insurancePaise: number;
   giftPaise: number;
+  /** Frames chosen per item, already totalled by the caller. */
+  framePaise: number;
   /** Before any coupon. */
   beforeDiscountPaise: number;
   /** True when delivery was waived, so the page can say so. */
@@ -72,6 +76,9 @@ export interface Charges {
  */
 export function computeCharges(input: ChargeInput): Charges {
   const { subtotalPaise, sellerCount, wantsInsurance, wantsGiftPacking } = input;
+  // Framing is priced per item and totalled where the lines are known, so it
+  // arrives here already added up rather than being derived from a flag.
+  const framePaise = input.framePaise ?? 0;
 
   const waived = subtotalPaise >= CHARGES.freeDeliveryAbovePaise;
   const deliveryPaise = waived
@@ -89,7 +96,9 @@ export function computeCharges(input: ChargeInput): Charges {
     deliveryPaise,
     insurancePaise,
     giftPaise,
-    beforeDiscountPaise: subtotalPaise + deliveryPaise + insurancePaise + giftPaise,
+    framePaise,
+    beforeDiscountPaise:
+      subtotalPaise + deliveryPaise + insurancePaise + giftPaise + framePaise,
     deliveryWaived: waived,
   };
 }

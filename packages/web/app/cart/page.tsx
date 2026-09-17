@@ -13,6 +13,7 @@ import { checkoutCart } from '@/app/actions.ts';
 const DELIVERY_PER_SELLER = 60;
 const FREE_DELIVERY_ABOVE = 5000;
 import { AddressForm, AddressPicker, type Address } from '@/components/AddressPicker.tsx';
+import { FramePicker, type Frame } from '@/components/FramePicker.tsx';
 import { BannerSlot } from '@/components/BannerSlot.tsx';
 import { DashboardShell, Empty, Tile } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
@@ -43,15 +44,17 @@ export default async function CartPage({
   if (user === null) redirect('/signin');
 
   const token = await sessionToken();
-  const [cart, saved, orders, seller, addressResult] = await Promise.all([
+  const [cart, saved, orders, seller, addressResult, frameResult] = await Promise.all([
     api<BasketResponse>('/v1/cart', { token }),
     api<BasketResponse>('/v1/saved', { token }),
     api<{ orders: { role: string }[] }>('/v1/orders', { token }),
     currentSeller(),
     api<{ addresses: Address[] }>('/v1/addresses', { token }),
+    api<{ frames: Frame[] }>('/v1/frames', { revalidate: 300 }),
   ]);
 
   const addresses = addressResult.ok ? addressResult.data.addresses : [];
+  const frames = frameResult.ok ? frameResult.data.frames : [];
 
   const items = cart.ok ? cart.data.items : [];
   const gone = items.filter((i) => !i.available);
@@ -67,6 +70,15 @@ export default async function CartPage({
   // this is a preview, not the price.
   const freeDelivery = total >= FREE_DELIVERY_ABOVE;
   const delivery = freeDelivery ? 0 : DELIVERY_PER_SELLER * Math.max(sellerCount, 1);
+
+  // Frames are chosen per line, so the total is the sum of what each line
+  // picked. Prices come from the same list the picker showed, and checkout
+  // reads them again from the database before charging anything.
+  const framed = buyable.filter((i) => (i.frame?.code ?? null) !== null);
+  const frameTotal = framed.reduce(
+    (sum, i) => sum + (frames.find((f) => f.code === i.frame?.code)?.priceInr ?? 0),
+    0,
+  );
 
   return (
     <DashboardShell
@@ -195,6 +207,27 @@ export default async function CartPage({
                       </button>
                     </form>
                   </div>
+
+                  {/* Framing is offered per note, not per basket: each one is a
+                      different gift with a different message on it. Nothing is
+                      offered on a line that can no longer be bought. */}
+                  {item.available && frames.length > 0 && (
+                    <FramePicker
+                      listingId={item.listingId}
+                      noteImageUrl={item.imageUrl}
+                      frames={frames}
+                      chosen={
+                        item.frame ?? {
+                          code: null,
+                          photoUrl: null,
+                          message: null,
+                          recipient: null,
+                          sender: null,
+                          occasionOn: null,
+                        }
+                      }
+                    />
+                  )}
                 </li>
               ))}
             </ul>
@@ -232,6 +265,15 @@ export default async function CartPage({
                     )}
                   </dd>
                 </div>
+
+                {framed.length > 0 && (
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-slate-dim">
+                      Framing · {framed.length} note{framed.length === 1 ? '' : 's'}
+                    </dt>
+                    <dd className="tabular-nums text-slate">{rupees(frameTotal)}</dd>
+                  </div>
+                )}
 
                 {!freeDelivery && (
                   <p className="text-xs text-slate-dim">

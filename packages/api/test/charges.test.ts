@@ -16,7 +16,8 @@ const charge = (
   sellerCount = 1,
   wantsInsurance = false,
   wantsGiftPacking = false,
-) => computeCharges({ subtotalPaise, sellerCount, wantsInsurance, wantsGiftPacking });
+  framePaise = 0,
+) => computeCharges({ subtotalPaise, sellerCount, wantsInsurance, wantsGiftPacking, framePaise });
 
 describe('bps', () => {
   it('takes a percentage in integers', () => {
@@ -69,10 +70,10 @@ describe('insurance', () => {
 
 describe('the total', () => {
   it('adds every part exactly', () => {
-    const c = charge(10_000_00, 2, true, true);
+    const c = charge(10_000_00, 2, true, true, 2_499_00);
     assert.equal(
       c.beforeDiscountPaise,
-      c.subtotalPaise + c.deliveryPaise + c.insurancePaise + c.giftPaise,
+      c.subtotalPaise + c.deliveryPaise + c.insurancePaise + c.giftPaise + c.framePaise,
       'the parts must sum to the total shown',
     );
   });
@@ -80,6 +81,18 @@ describe('the total', () => {
   it('charges gift packing only when asked', () => {
     assert.equal(charge(1_000_00, 1, false, false).giftPaise, 0);
     assert.equal(charge(1_000_00, 1, false, true).giftPaise, CHARGES.giftPackingPaise);
+  });
+
+  it('carries the frames through untouched', () => {
+    // Frame prices are worked out from the cart lines and snapshotted there;
+    // this function is handed a total and must neither round it nor discount
+    // it away, or an invoice and its order items would disagree.
+    assert.equal(charge(1_000_00).framePaise, 0);
+    assert.equal(charge(1_000_00, 1, false, false, 1_499_00).framePaise, 1_499_00);
+    assert.equal(
+      charge(1_000_00, 1, false, false, 1_499_00).beforeDiscountPaise,
+      1_000_00 + 60_00 + 1_499_00,
+    );
   });
 });
 

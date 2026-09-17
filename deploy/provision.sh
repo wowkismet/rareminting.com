@@ -48,6 +48,13 @@ mkdir -p "$APP_DIR/releases" "$APP_DIR/uploads"
 # asking, and 0700 keeps them from anything running as another user.
 mkdir -p "$APP_DIR/kyc"
 chmod 700 "$APP_DIR/kyc"
+
+# Photographs a buyer sends to be printed on a frame. The same reasoning as
+# kyc/ above and for the same reason: a picture of somebody's mother is not
+# public the way a picture of the note they are selling is.
+mkdir -p "$APP_DIR/gifts"
+chmod 700 "$APP_DIR/gifts"
+
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 # Nginx serves uploaded photographs straight off the disk, so www-data has to
@@ -236,6 +243,7 @@ User=${APP_USER}
 WorkingDirectory=${APP_DIR}/current/api
 Environment=UPLOAD_DIR=${APP_DIR}/uploads
 Environment=KYC_DIR=${APP_DIR}/kyc
+Environment=GIFT_DIR=${APP_DIR}/gifts
 EnvironmentFile=/etc/rareminting.env
 ExecStart=/usr/bin/node src/server.ts
 Restart=always

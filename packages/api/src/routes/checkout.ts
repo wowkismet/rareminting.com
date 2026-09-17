@@ -36,6 +36,16 @@ interface CartRow {
   serial_digits: string | null;
   price_paise: string | null;
   state: string;
+  // Null on every line the buyer chose not to frame.
+  frame_id: string | null;
+  frame_code: string | null;
+  frame_name: string | null;
+  frame_price_paise: string | null;
+  frame_photo_key: string | null;
+  frame_message: string | null;
+  frame_recipient: string | null;
+  frame_sender: string | null;
+  frame_occasion_on: string | null;
 }
 
 /** Human-facing reference. Short enough to read down a phone line. */
@@ -106,12 +116,22 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
     }
 
     const cart = await ctx.db.query<CartRow>(
+      // The frame joins here so its price is read from the same snapshot the
+      // rest of the line is priced from. Reading it later, in its own query,
+      // would leave a window in which a frame could be repriced between the
+      // total the buyer was shown and the total they were charged.
       `select c.listing_id, l.seller_id, s.kind as seller_kind, l.title,
-              n.serial_digits, l.price_paise::text as price_paise, l.state
+              n.serial_digits, l.price_paise::text as price_paise, l.state,
+              f.id::text  as frame_id, f.code as frame_code, f.name as frame_name,
+              f.price_paise::text as frame_price_paise,
+              c.frame_photo_key, c.frame_message, c.frame_recipient,
+              c.frame_sender, c.frame_occasion_on::text as frame_occasion_on
          from cart_items c
          join listings l on l.id = c.listing_id
          join sellers  s on s.id = l.seller_id
          left join notes n on n.listing_id = l.id
+         left join frame_templates f
+                on f.id = c.frame_template_id and f.is_active = true
         where c.buyer_id = $1
         order by c.added_at asc`,
       [buyerId],
@@ -277,10 +297,19 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
 
         for (const line of lines) {
           await tx.query(
+            // The frame's name and price are copied onto the line rather than
+            // referenced. That row can be repriced or withdrawn next month and
+            // this invoice must still say what was bought and what it cost,
+            // which is the same rule the billing address follows.
             `insert into order_items
                (order_id, listing_id, subtotal_paise,
-                commission_paise, gst_on_commission_paise, tds_paise, state)
-             values ($1, $2, $3, $4, $5, $6, 'payment_pending')`,
+                commission_paise, gst_on_commission_paise, tds_paise, state,
+                frame_template_id, frame_code, frame_name, frame_price_paise,
+                frame_photo_key, frame_message, frame_recipient, frame_sender,
+                frame_occasion_on)
+             values ($1, $2, $3, $4, $5, $6, 'payment_pending',
+                     $7::uuid, $8, $9, coalesce($10::bigint, 0),
+                     $11, $12, $13, $14, $15::date)`,
             [
               orderId,
               line.row.listing_id,
@@ -288,6 +317,15 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
               line.money.commissionPaise,
               line.money.gstOnCommissionPaise,
               line.money.tdsPaise,
+              line.row.frame_id,
+              line.row.frame_code,
+              line.row.frame_name,
+              line.row.frame_price_paise,
+              line.row.frame_photo_key,
+              line.row.frame_message,
+              line.row.frame_recipient,
+              line.row.frame_sender,
+              line.row.frame_occasion_on,
             ],
           );
         }
@@ -302,11 +340,19 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
 
       // Charges, once, across the basket. Delivery is per seller because each
       // posts their own parcel; insurance and gift packing are per basket.
+      // Framing is per line, so it is totalled from the basket rather than
+      // derived from a flag. Lines without a frame contribute nothing.
+      const framePaise = cart.rows.reduce(
+        (n, r) => n + (r.frame_price_paise === null ? 0 : Number(r.frame_price_paise)),
+        0,
+      );
+
       const charges = computeCharges({
         subtotalPaise: groupTotal,
         sellerCount: bySeller.size,
         wantsInsurance,
         wantsGiftPacking,
+        framePaise,
       });
 
       // The coupon is redeemed inside this transaction, under a lock, so two
@@ -343,7 +389,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
         `update order_groups
             set total_paise = $2, delivery_paise = $3, insurance_paise = $4,
                 gift_paise = $5, discount_paise = $6,
-                insured_value_paise = $7
+                insured_value_paise = $7, frame_paise = $8
           where id = $1`,
         [
           groupId,
@@ -353,6 +399,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
           charges.giftPaise,
           discountPaise,
           wantsInsurance ? groupTotal : null,
+          charges.framePaise,
         ],
       );
 
@@ -379,6 +426,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
             deliveryWaived: charges.deliveryWaived,
             insuranceInr: charges.insurancePaise / 100,
             giftPackingInr: charges.giftPaise / 100,
+            frameInr: charges.framePaise / 100,
             discountInr: discountPaise / 100,
             totalInr: payable / 100,
             sellers: orders.length,
@@ -409,6 +457,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
       delivery_paise: string;
       insurance_paise: string;
       gift_paise: string;
+      frame_paise: string;
       discount_paise: string;
       placed_at: string | null;
       bill_to_name: string | null;
@@ -423,6 +472,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
               delivery_paise::text  as delivery_paise,
               insurance_paise::text as insurance_paise,
               gift_paise::text      as gift_paise,
+              frame_paise::text     as frame_paise,
               discount_paise::text  as discount_paise,
               placed_at::text as placed_at,
               bill_to_name, bill_to_line1, bill_to_line2, bill_to_city,
@@ -490,6 +540,7 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
         deliveryInr: Number(g.delivery_paise) / 100,
         insuranceInr: Number(g.insurance_paise) / 100,
         giftPackingInr: Number(g.gift_paise) / 100,
+        frameInr: Number(g.frame_paise) / 100,
         discountInr: Number(g.discount_paise) / 100,
         totalInr: Number(g.total_paise) / 100,
         placedAt: g.placed_at,

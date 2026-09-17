@@ -488,6 +488,59 @@ async function isAdmin(token: string): Promise<boolean> {
  * most often wrong are a PIN code and a phone number, and both are fixable in
  * a second if somebody is told which.
  */
+/* ------------------------- frames and gifting ------------------------- */
+
+/**
+ * Choose a frame for one note, and write the card that goes in it.
+ *
+ * The photograph rides in the same submission but is forwarded separately,
+ * because a file cannot travel in the JSON body. It is sent second and its
+ * failure is not fatal: the frame and the words are saved either way, and a
+ * buyer whose photograph did not upload can try again without losing the
+ * message they just typed.
+ */
+export async function setFrame(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  const frameCode = text(data, 'frameCode');
+  if (listingId === '') return;
+
+  // The "no frame" option comes back as an empty code rather than its own
+  // button, so choosing and un-choosing are the same gesture.
+  if (frameCode === '') {
+    await api(`/v1/cart/${listingId}/frame`, { method: 'DELETE', token });
+    revalidatePath('/cart');
+    return;
+  }
+
+  const result = await api(`/v1/cart/${listingId}/frame`, {
+    method: 'PUT',
+    token,
+    body: {
+      frameCode,
+      message: text(data, 'message'),
+      recipient: text(data, 'recipient'),
+      sender: text(data, 'sender'),
+      occasionOn: text(data, 'occasionOn'),
+    },
+  });
+
+  const photo = data.get('photo');
+  if (result.ok && photo instanceof File && photo.size > 0) {
+    const forward = new FormData();
+    forward.set('file', photo, photo.name);
+    await fetch(
+      `${process.env['API_URL'] ?? 'http://127.0.0.1:4000'}/v1/cart/${listingId}/frame/photo`,
+      { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: forward },
+    ).catch(() => undefined);
+  }
+
+  revalidatePath('/cart');
+  if (!result.ok) redirect(`/cart?error=${encodeURIComponent(result.error.message)}`);
+}
+
 export async function addAddress(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');

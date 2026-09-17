@@ -91,8 +91,13 @@ export default async function AdminOrdersPage() {
                   {orders.map((o) => (
                     <tr key={o.id}>
                       <td className="border-b border-sand-line p-3">
+                        {/* Straight to the invoice rather than to the order
+                            page: staff are not party to the sale, so
+                            /orders/:id refuses them by design. The invoice is
+                            the view that admits them, and carries the
+                            delivery label and tracking with it. */}
                         <a
-                          href={`/orders/${o.id}`}
+                          href={`/orders/${o.id}/invoice`}
                           className="font-mono text-xs text-slate underline-offset-4 hover:underline"
                         >
                           {o.orderNumber}

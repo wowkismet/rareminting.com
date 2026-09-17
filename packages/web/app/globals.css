@@ -187,3 +187,54 @@
   );
   pointer-events: none;
 }
+
+/* ------------------------------------------------------------------ */
+/* Printing                                                            */
+/*                                                                     */
+/* Invoices and delivery labels are printed on an ordinary office       */
+/* printer, so the rules here are about paper rather than about the     */
+/* screen: no navigation, no dark ground, and a label that can be cut   */
+/* off without the invoice coming with it.                              */
+/* ------------------------------------------------------------------ */
+
+@media print {
+  /* Anything that only makes sense while clicking. */
+  .no-print,
+  header nav,
+  footer {
+    display: none !important;
+  }
+
+  /* The site paints a dark navy ground. Printed, that is a cartridge of
+     toner for no information at all. */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .invoice-sheet {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Keep the label whole. A barcode split across a page break does not
+     scan, and a scanner is the only reader that matters here. */
+  .delivery-label {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Underlined blue links are noise on paper, and a URL nobody can click
+     is worse than none. */
+  a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

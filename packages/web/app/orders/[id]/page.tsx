@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 
 import { PayButton } from '@/components/PayButton.tsx';
+import { ShipButton } from '@/components/ShipButton.tsx';
+import { Tracking, type TrackingData } from '@/components/Tracking.tsx';
 import { DashboardShell } from '@/components/DashboardShell.tsx';
 import { api } from '@/lib/api.ts';
 import { currentUser, sessionToken } from '@/lib/session.ts';
@@ -50,13 +52,18 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   if (user === null) redirect('/signin');
   const token = await sessionToken();
 
-  const [result, sections] = await Promise.all([
+  const [result, sections, trackingResult] = await Promise.all([
     api<{ order: OrderDetail }>(`/v1/orders/${id}`, { token }),
     viewerMenu(),
+    // Asked for alongside the order rather than after it: the courier call
+    // takes as long as it takes, and serialising the two would show the page
+    // twice as slowly for no benefit.
+    api<TrackingData>(`/v1/orders/${id}/tracking`, { token }),
   ]);
   if (!result.ok) notFound();
   const order = result.data.order;
   const isSeller = order.role === 'seller';
+  const tracking = trackingResult.ok ? trackingResult.data : null;
 
   return (
     <DashboardShell
@@ -142,9 +149,28 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
           </dl>
         </section>
 
-        <a href="/orders" className="text-sm text-accent-deep underline underline-offset-4">
-          Back to orders
-        </a>
+        {/* Where the parcel is. Shown to both sides of the sale: "where is
+            it" is the commonest question a marketplace gets, and every answer
+            the page gives for itself is one nobody has to write by hand. */}
+        {tracking !== null && <Tracking tracking={tracking} />}
+
+        {/* Booking is the seller's to do, and deliberately not automatic on
+            payment — a note goes in the post once someone has packed it. */}
+        {isSeller && tracking !== null && !tracking.booked && order.state === 'paid' && (
+          <ShipButton orderId={order.id} />
+        )}
+
+        <div className="flex flex-wrap items-center gap-4 border-t border-sand-line pt-5">
+          <a
+            href={`/orders/${order.id}/invoice`}
+            className="rounded-full border border-sand-line px-5 py-2 text-xs text-slate transition-colors hover:border-accent-deep"
+          >
+            {order.state === 'payment_pending' ? 'Proforma' : 'Invoice'} &amp; delivery label
+          </a>
+          <a href="/orders" className="text-sm text-accent-deep underline underline-offset-4">
+            Back to orders
+          </a>
+        </div>
       </div>
     </DashboardShell>
   );

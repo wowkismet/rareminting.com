@@ -108,7 +108,7 @@ export async function SiteHeader({
               the two. `shrink-0` alongside it stops either side collapsing
               below its own content to get there. */}
           <a href="/" aria-label="Rare Minting home" className="shrink-0 lg:flex-1">
-            <Wordmark size={compact ? 'sm' : 'md'} />
+            <Wordmark />
           </a>
 
           {/* A GET form, so a search is a URL somebody can share or go back to. */}

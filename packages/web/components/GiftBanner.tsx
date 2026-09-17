@@ -46,6 +46,28 @@ import type { ReactNode } from 'react';
 const PORTRAIT_SRC: string | null = null;
 
 /**
+ * The finished banner artwork, if there is one.
+ *
+ * Null renders the built version below — the composition in markup, which
+ * needs no asset and reflows on a narrow screen. Set this to a path under
+ * `public/` and that image is shown instead, with the two buttons beneath it.
+ *
+ * Supplied artwork wins when it exists, because a designed composite carries
+ * photography and depth that CSS gradients only approximate. What it does not
+ * carry is text a screen reader or a search engine can read, or type that
+ * stays legible at 380px — so the feature row is still rendered as real text
+ * underneath rather than left to the version baked into the picture.
+ *
+ * Whoever sets this is asserting the business may publish everything in the
+ * frame, the likeness included. See PORTRAIT_SRC above for why that matters.
+ */
+const BANNER_SRC: string | null = null;
+
+/** Description for anyone who cannot see the artwork. */
+const BANNER_ALT =
+  'A framed Indian banknote beside a photograph and a birthday message, with a Rareminting gift box.';
+
+/**
  * The example in the frame: a note whose serial reads as a date.
  *
  * A date, not a denomination, because that is the entire product. The
@@ -135,6 +157,70 @@ export function GiftBanner() {
       aria-labelledby="gift-banner-heading"
       className="overflow-hidden rounded-sm border border-line bg-ink"
     >
+      <h2 id="gift-banner-heading" className="sr-only">
+        Frame and gift a banknote
+      </h2>
+
+      {BANNER_SRC === null ? <BuiltBanner /> : <Artwork />}
+
+      <Features />
+
+      {/* ---------- The two ways in ----------
+          Two buttons because the service is two things people arrive wanting.
+          Some are shopping for the note and will write something once they
+          have it; others already know what they want to say and need a note
+          to say it on. Both land in the same place eventually, but being told
+          only "frame a note" leaves the second sort thinking the message is
+          somebody else's product. */}
+      <div className="flex flex-wrap items-center justify-center gap-3 border-t border-line bg-ink px-6 py-6">
+        <a
+          href="/browse"
+          className="rounded-full bg-secondary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-accent hover:text-primary"
+        >
+          Frame a note
+        </a>
+        <a
+          href="/cart"
+          className="rounded-full border border-accent px-8 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-primary"
+        >
+          Add a message
+        </a>
+        <p className="w-full text-center text-xs text-cream-dim sm:w-auto sm:text-left">
+          Choose a frame, write the card, and we print and post it.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The supplied artwork.
+ *
+ * Unoptimised is deliberate: this is a photographic composite whose value is
+ * its depth and grain, and Next's default quality visibly muddies the note
+ * and the gilt. It is one request on one page, and the alternative — a banner
+ * that looks cheap — costs more than the bytes.
+ *
+ * The feature row still renders as text beneath it. The artwork has its own
+ * baked in, but baked-in type is unreadable at 380px and invisible to a
+ * screen reader, so the words exist twice on purpose.
+ */
+function Artwork() {
+  return (
+    <img
+      src={BANNER_SRC ?? ''}
+      alt={BANNER_ALT}
+      className="w-full"
+      loading="lazy"
+      decoding="async"
+    />
+  );
+}
+
+/** The composition in markup, used until artwork is supplied. */
+function BuiltBanner() {
+  return (
+    <>
       <div className="grid items-center gap-8 p-6 sm:p-10 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_minmax(0,14rem)] lg:gap-10">
         {/* ---------- The mark, and the promise ---------- */}
         <div className="text-center lg:text-left">
@@ -168,12 +254,21 @@ export function GiftBanner() {
           </a>
         </div>
       </div>
+    </>
+  );
+}
 
-      {/* ---------- What comes with it ---------- */}
+/**
+ * What comes with it, as text.
+ *
+ * Rendered whichever banner is showing. The supplied artwork has this row
+ * baked into the picture, but type inside an image is unreadable on a phone
+ * and invisible to a screen reader and a search engine — so the words exist
+ * twice, and only one of the two can be read by everyone.
+ */
+function Features() {
+  return (
       <div className="border-t border-line bg-primary">
-        <h2 id="gift-banner-heading" className="sr-only">
-          Frame and gift a banknote
-        </h2>
         <ul className="mx-auto grid max-w-6xl grid-cols-2 gap-px sm:grid-cols-3 lg:grid-cols-6">
           {FEATURES.map((f) => (
             <li
@@ -200,7 +295,6 @@ export function GiftBanner() {
           ))}
         </ul>
       </div>
-    </section>
   );
 }
 

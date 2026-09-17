@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { ReactNode } from 'react';
 
 /**
@@ -61,7 +62,7 @@ const PORTRAIT_SRC: string | null = null;
  * Whoever sets this is asserting the business may publish everything in the
  * frame, the likeness included. See PORTRAIT_SRC above for why that matters.
  */
-const BANNER_SRC: string | null = null;
+const BANNER_SRC: string | null = '/gift-banner.webp';
 
 /** Description for anyone who cannot see the artwork. */
 const BANNER_ALT =
@@ -194,25 +195,36 @@ export function GiftBanner() {
 }
 
 /**
- * The supplied artwork.
+ * The supplied artwork, unchanged.
  *
- * Unoptimised is deliberate: this is a photographic composite whose value is
- * its depth and grain, and Next's default quality visibly muddies the note
- * and the gilt. It is one request on one page, and the alternative — a banner
- * that looks cheap — costs more than the bytes.
+ * Served through next/image at quality 90 rather than as the raw file. The
+ * source is a 1.9MB PNG, which is the wrong container for a photographic
+ * composite — PNG cannot do lossy, so every grain of that marble costs full
+ * price. Next re-encodes it to WebP or AVIF and cuts a size for the screen
+ * asking, so a phone on a slow connection fetches a fraction of it.
+ *
+ * Quality 90, not the default 75: the note and the silver lip are what this
+ * picture is selling, and they are exactly what shows compression first.
+ *
+ * The design itself is untouched. Nothing is cropped, recoloured or
+ * re-composed; only the bytes carrying it change.
  *
  * The feature row still renders as text beneath it. The artwork has its own
- * baked in, but baked-in type is unreadable at 380px and invisible to a
- * screen reader, so the words exist twice on purpose.
+ * baked in, but type inside an image is unreadable at 380px and invisible to
+ * a screen reader, so the words exist twice on purpose.
  */
 function Artwork() {
   return (
-    <img
+    <Image
       src={BANNER_SRC ?? ''}
       alt={BANNER_ALT}
-      className="w-full"
+      width={2048}
+      height={768}
+      quality={90}
+      // It sits three rows down the floor, so it is never the first paint.
       loading="lazy"
-      decoding="async"
+      sizes="100vw"
+      className="h-auto w-full"
     />
   );
 }

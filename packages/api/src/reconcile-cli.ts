@@ -48,10 +48,17 @@ async function main(): Promise<void> {
 
   try {
     const { rows } = await pool.query<PendingRow>(
+      // Joined on either side of the payment. A basket paid for in one go
+      // carries a group and leaves order_id null, so an inner join to orders
+      // silently skipped every multi-seller purchase -- which is most of them,
+      // and exactly the ones worth the most. The sweep reported "1 checked"
+      // while two payments were outstanding.
       `select o.id as order_id, o.order_number, o.state as order_state,
               p.id as payment_id, p.gateway_order_id, p.amount_paise::text as amount_paise
          from payments p
-         join orders o on o.id = p.order_id
+         join orders o
+           on o.id = p.order_id
+           or (p.order_id is null and o.group_id = p.group_id)
         where p.gateway_order_id is not null
           and p.gateway = 'cashfree'
           and p.state in ('created', 'authorized')

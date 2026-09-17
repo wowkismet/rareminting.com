@@ -24,7 +24,6 @@ import { oneOf, optionalString, requiredString } from './validate.ts';
 export const GRADES = ['UNC', 'AU', 'XF', 'VF', 'F', 'VG', 'G', 'POOR'] as const;
 
 /** Matches the sale_mode enum. */
-export const SALE_MODES = ['fixed', 'offers', 'auction'] as const;
 
 /** Matches the listing_state enum, minus the states only the system sets. */
 export const EDITABLE_STATES = ['draft', 'pending_review', 'minted', 'withdrawn'] as const;

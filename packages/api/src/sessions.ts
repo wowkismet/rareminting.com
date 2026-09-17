@@ -5,7 +5,7 @@
  * the database, so a leaked table does not let anyone sign in.
  */
 
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { Db } from './db.ts';
 import { one } from './db.ts';
 
@@ -26,12 +26,6 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** Compare two hex digests without leaking position through timing. */
-export function tokenHashEquals(a: string, b: string): boolean {
-  const left = Buffer.from(a, 'utf8');
-  const right = Buffer.from(b, 'utf8');
-  return left.length === right.length && timingSafeEqual(left, right);
-}
 
 interface SessionRow {
   id: string;

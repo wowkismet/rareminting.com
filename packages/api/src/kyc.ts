@@ -14,7 +14,7 @@
  * yields nothing.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 /**
  * Read the pepper, or refuse to run.
@@ -40,12 +40,6 @@ export function hashIdentityNumber(normalized: string): string {
 }
 
 /** Compare two hashes without leaking their contents through timing. */
-export function hashesMatch(a: string, b: string): boolean {
-  const left = Buffer.from(a, 'hex');
-  const right = Buffer.from(b, 'hex');
-  if (left.length !== right.length || left.length === 0) return false;
-  return timingSafeEqual(left, right);
-}
 
 /** True when the service is configured to store identity numbers at all. */
 export function kycStorageConfigured(): boolean {

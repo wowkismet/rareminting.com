@@ -33,12 +33,6 @@ export function one<R>(result: QueryResult<R>): R | null {
 }
 
 /** Single row, throwing when absent. Use only where absence is a bug. */
-export function exactlyOne<R>(result: QueryResult<R>): R {
-  const row = result.rows[0];
-  if (row === undefined) throw new Error('expected exactly one row, got none');
-  return row;
-}
-
 /** PostgreSQL error codes worth branching on. */
 export const PG_UNIQUE_VIOLATION = '23505';
 export const PG_CHECK_VIOLATION = '23514';

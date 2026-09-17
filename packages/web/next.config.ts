@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   // hoisted dependencies and the standalone build is silently incomplete.
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
 
+  // Do not announce the framework on every response. It does not stop anyone
+  // determined, but it does stop this site appearing in a search for hosts
+  // running a version with a published advisory. nginx's own banner is
+  // suppressed alongside it, in deploy/provision.sh.
+  poweredByHeader: false,
+
   experimental: {
     serverActions: {
       // A listing is submitted as a server action carrying a photograph, and

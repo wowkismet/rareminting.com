@@ -110,6 +110,17 @@ else
   echo "==> database role already exists; leaving ${ENV_FILE} untouched"
 fi
 
+# --- shared, non-secret settings ----------------------------------------
+# Read by both services. Deliberately separate from /etc/rareminting.env:
+# the web process has no business holding the database password or the
+# payment secret, and one EnvironmentFile for everything would give it both.
+cat > /etc/rareminting-public.env <<PUBENV
+# Non-secret settings shared by the web and api services.
+AUCTIONS_ENABLED=true
+SITE_URL=https://${PRIMARY}
+PUBENV
+chmod 644 /etc/rareminting-public.env
+
 # --- KYC pepper ---------------------------------------------------------
 # The key that turns a PAN or an Aadhaar number into a stored HMAC. Generated
 # once and never rotated: every hash on file was computed with it, so replacing
@@ -135,6 +146,34 @@ ufw allow 'Nginx Full'
 ufw --force enable
 ufw status verbose
 
+# --- nginx security headers ---------------------------------------------
+# In a snippet rather than inline, for two reasons: certbot rewrites the site
+# file and would drop anything it does not recognise, and nginx discards the
+# whole inherited add_header set the moment a location adds one of its own --
+# so the locations that set their own have to include this back.
+mkdir -p /etc/nginx/snippets
+cat > /etc/nginx/snippets/rareminting-security.conf <<SECHEADERS
+# A year of HTTPS-only. Without includeSubDomains on purpose: it would bind
+# subdomains that do not exist yet to HTTPS for a year, and that is a long
+# time to be wrong about.
+add_header Strict-Transport-Security "max-age=31536000" always;
+
+# Visitor-supplied files are served from this origin, so a browser must never
+# be talked into deciding a JPEG is really a script.
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" always;
+
+# REPORT-ONLY until the violation reports are quiet. An over-tight policy here
+# breaks the payment SDK silently, which is the worst possible way to find out.
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sdk.cashfree.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://sdk.cashfree.com https://api.cashfree.com; frame-src https://sdk.cashfree.com https://*.cashfree.com; form-action 'self' https://*.cashfree.com; object-src 'none'; base-uri 'self'" always;
+SECHEADERS
+
+# Do not advertise the exact nginx build in every response.
+sed -i "s/^\(\s*\)server_tokens .*/\1server_tokens off;/" /etc/nginx/nginx.conf || true
+grep -q "server_tokens" /etc/nginx/nginx.conf || sed -i "s/^\(\s*\)sendfile on;/\1server_tokens off;\n\1sendfile on;/" /etc/nginx/nginx.conf
+
 # --- nginx reverse proxy ------------------------------------------------
 # The heredoc is quoted, so bash expands nothing and every Nginx variable is
 # written literally. The two values that genuinely come from this script are
@@ -153,11 +192,14 @@ server {
     # between a seller being able to list an item and not.
     client_max_body_size 25m;
 
+    include /etc/nginx/snippets/rareminting-security.conf;
+
     # Next.js emits immutable, content-hashed asset filenames.
     location /_next/static/ {
         proxy_pass http://127.0.0.1:__PORT__;
         proxy_cache_valid 200 60m;
         add_header Cache-Control "public, max-age=31536000, immutable";
+        include /etc/nginx/snippets/rareminting-security.conf;
     }
 
     # Seller photographs, served from disk. nosniff matters here: these are
@@ -165,7 +207,7 @@ server {
     # interpreting one as script.
     location /media/ {
         alias __APP_DIR__/uploads/;
-        add_header X-Content-Type-Options "nosniff" always;
+        include /etc/nginx/snippets/rareminting-security.conf;
         expires 30d;
         access_log off;
     }
@@ -231,6 +273,8 @@ WorkingDirectory=${APP_DIR}/current/packages/web
 Environment=NODE_ENV=production
 Environment=PORT=${PORT}
 Environment=HOSTNAME=127.0.0.1
+# Shared flags only. The secrets file is NOT read here on purpose.
+EnvironmentFile=/etc/rareminting-public.env
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
@@ -254,6 +298,7 @@ WorkingDirectory=${APP_DIR}/current/api
 Environment=UPLOAD_DIR=${APP_DIR}/uploads
 Environment=KYC_DIR=${APP_DIR}/kyc
 Environment=GIFT_DIR=${APP_DIR}/gifts
+EnvironmentFile=/etc/rareminting-public.env
 EnvironmentFile=/etc/rareminting.env
 ExecStart=/usr/bin/node src/server.ts
 Restart=always

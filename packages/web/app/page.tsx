@@ -2,6 +2,7 @@ import { SUGGESTED_DATES, formatLongDate, parseIsoDate } from '@/lib/search.ts';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { BannerSlot } from '@/components/BannerSlot.tsx';
+import { GiftBanner } from '@/components/GiftBanner.tsx';
 import { FamousDates } from '@/components/FamousDates.tsx';
 import { ListingCard } from '@/components/ListingCard.tsx';
 import { api, type ApiListing } from '@/lib/api.ts';
@@ -64,6 +65,15 @@ function shortDate(iso: string): string {
  * and the other two are not modelled at all — so a tile for them would look
  * like a category and behave like a link to everything.
  */
+/**
+ * How many notes the floor shows before the gift banner and the date bands.
+ *
+ * Eighteen, which is three rows at the six-wide breakpoint. A multiple of six
+ * matters: anything else leaves the last row of the first block short, with a
+ * visible gap where a card should be.
+ */
+const ROWS_BEFORE_BANDS = 18;
+
 const EXPLORE: readonly { icon: string; label: string; sub: string; href: string }[] = [
   { icon: '📅', label: 'Date match', sub: 'Notes that spell a date', href: '#date' },
   { icon: '💎', label: 'Fancy numbers', sub: 'Solids, radars, ladders', href: '/browse?pattern=unique' },
@@ -561,12 +571,17 @@ export default async function Home({
             </div>
           ) : (
             <>
-              {/* The band sits between rows rather than after everything, so
-                  somebody scrolling the floor meets it. Split into two grids
-                  rather than spanning a column, which keeps it full width
-                  whatever the breakpoint. */}
+              {/* Three full rows, then the bands. Split into two grids rather
+                  than spanning a column, which keeps a band full width at
+                  every breakpoint.
+
+                  Eighteen, not seventeen: the grid is six wide from lg, so the
+                  count has to be a multiple of six or the last row of the
+                  first block sits short and the page looks broken. This was
+                  five for a long time, which is exactly the gap that kept
+                  being reported as "why does this row have five". */}
               <div className="grid gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {listings.slice(0, 5).map((listing) => (
+                {listings.slice(0, ROWS_BEFORE_BANDS).map((listing) => (
                   <ListingCard
                     key={listing.id}
                     listing={listing}
@@ -576,15 +591,22 @@ export default async function Home({
                 ))}
               </div>
 
+              {/* What a note becomes once it is framed. Placed here, three
+                  rows in, because somebody who has scrolled this far is
+                  looking rather than passing through. */}
+              <div className="my-10">
+                <GiftBanner />
+              </div>
+
               <div className="my-8">
                 <FamousDates />
               </div>
 
               <BannerSlot slot="home_mid" className="mb-8" />
 
-              {listings.length > 5 && (
+              {listings.length > ROWS_BEFORE_BANDS && (
                 <div className="grid gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                  {listings.slice(5).map((listing) => (
+                  {listings.slice(ROWS_BEFORE_BANDS).map((listing) => (
                     <ListingCard
                       key={listing.id}
                       listing={listing}

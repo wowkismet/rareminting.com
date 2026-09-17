@@ -1211,6 +1211,35 @@ export async function addToCart(data: FormData): Promise<void> {
   revalidateFrom(data);
 }
 
+/**
+ * Add a note and go straight to framing it.
+ *
+ * The frame picker lives on the cart line, because a frame is bought with a
+ * note and priced per note. That is the right place for it and the wrong
+ * place to discover it: somebody reading a listing and thinking "this would
+ * make a gift" had no way through, and the banner inviting them to frame one
+ * led to a page with nothing to frame.
+ *
+ * So this does the two steps as one and lands on the panel already open.
+ */
+export async function frameAndGift(data: FormData): Promise<void> {
+  const token = await sessionToken();
+  if (token === null) redirect('/signin');
+
+  const listingId = text(data, 'listingId');
+  if (listingId === '') return;
+
+  // Already in the cart is not a failure here: the buyer still wants to reach
+  // the frame panel, and the API treats a repeat add as a no-op.
+  await api('/v1/cart', { method: 'POST', token, body: { listingId } });
+  revalidatePath('/cart');
+  revalidatePath(`/listing/${listingId}`);
+  // A query parameter rather than only a fragment: a fragment never reaches
+  // the server, so the panel could not be rendered already open. The fragment
+  // is kept alongside it so the browser still scrolls there.
+  redirect(`/cart?frame=${listingId}#frame-${listingId}`);
+}
+
 export async function removeFromCart(data: FormData): Promise<void> {
   const token = await sessionToken();
   if (token === null) redirect('/signin');

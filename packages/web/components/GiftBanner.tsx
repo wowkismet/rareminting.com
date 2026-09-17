@@ -26,6 +26,44 @@ import type { ReactNode } from 'react';
  * something this site models rather than assumes.
  */
 
+/**
+ * The portrait in the frame.
+ *
+ * Null ships a silhouette marked "your photo". Set it to a path under
+ * `public/` — `'/gift-portrait.jpg'` — and that image appears instead, with
+ * no other change needed.
+ *
+ * It is a switch rather than a hard-coded image because of who can lawfully
+ * go in that slot. A recognisable living person on a banner selling something
+ * is an implied endorsement, and in India that is personality-rights
+ * territory: the Delhi High Court has granted injunctions on exactly this,
+ * and components/FamousDates.tsx already records the same decision for the
+ * same reason. So the person here is either somebody whose likeness this
+ * business holds a release for, a model shot it has licensed, or nobody.
+ *
+ * Whoever sets this is asserting the first two. The default asserts the third.
+ */
+const PORTRAIT_SRC: string | null = null;
+
+/**
+ * The example in the frame: a note whose serial reads as a date.
+ *
+ * A date, not a denomination, because that is the entire product. The
+ * eleventh of October 1942 is a real date a visitor can search — /?date= it
+ * and the engine returns every note whose serial spells it.
+ *
+ * A date carries no personality claim; a name and a face do. So the date is
+ * the specific thing here and the recipient is left as the buyer's own, which
+ * is also what the frame will actually say when somebody buys one.
+ */
+const EXAMPLE = {
+  serial: '11 101942',
+  pretty: '11 October 1942',
+  iso: '1942-10-11',
+  series: 'Mahatma Gandhi Series',
+  recipient: 'Papa',
+} as const;
+
 const FEATURES: readonly { icon: ReactNode; head: string; sub: string }[] = [
   {
     head: 'Premium',
@@ -123,10 +161,10 @@ export function GiftBanner() {
             for a rare soul
           </p>
           <a
-            href="/browse"
+            href={`/?date=${EXAMPLE.iso}`}
             className="rounded-full bg-secondary px-7 py-2.5 text-xs font-medium text-cream transition-colors hover:bg-accent hover:text-primary"
           >
-            Frame a note
+            Find a date
           </a>
         </div>
       </div>
@@ -238,25 +276,36 @@ function FramedPiece() {
       >
         <div className="rounded-[1px] bg-ink p-3 sm:p-5">
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,1.3fr)] sm:gap-4">
-            {/* --- The note --- */}
+            {/* --- The note, and the date its serial reads as --- */}
             <div className="flex flex-col gap-2">
               <NotePlaceholder />
+              {/* The caption is the date rather than the denomination. The
+                  denomination is the least interesting thing about this note;
+                  what it is being sold for is that its serial spells a day. */}
               <div className="rounded-[2px] border border-accent/30 px-2 py-1 text-center">
-                <p className="font-listing text-[11px] leading-tight text-accent-bright">
-                  Indian ₹100 Note
+                <p className="font-listing text-[12px] leading-tight text-accent-bright">
+                  {EXAMPLE.pretty}
                 </p>
                 <p className="text-[8px] uppercase tracking-[0.18em] text-cream-dim">
-                  Mahatma Gandhi Series
+                  Serial {EXAMPLE.serial} · {EXAMPLE.series}
                 </p>
               </div>
             </div>
 
             {/* --- Their photograph --- */}
             <div
-              className="rounded-[2px] border border-accent/40 p-[3px]"
+              className="overflow-hidden rounded-[2px] border border-accent/40 p-[3px]"
               style={{ aspectRatio: '3 / 4' }}
             >
-              <PortraitPlaceholder />
+              {PORTRAIT_SRC === null ? (
+                <PortraitPlaceholder />
+              ) : (
+                <img
+                  src={PORTRAIT_SRC}
+                  alt=""
+                  className="h-full w-full rounded-[1px] object-cover"
+                />
+              )}
             </div>
 
             {/* --- The message --- */}
@@ -264,16 +313,16 @@ function FramedPiece() {
               <p className="font-display text-[13px] font-semibold leading-tight text-accent-bright">
                 Happy Birthday,
                 <br />
-                Amma
+                {EXAMPLE.recipient}!
               </p>
-              <p className="mx-auto mt-2 max-w-[22ch] text-[9px] leading-relaxed text-cream-dim">
-                The year you were born, in the serial of a note that outlived the decade. May it
-                keep your story as long as it has kept its own.
+              <p className="mx-auto mt-2 max-w-[24ch] text-[9px] leading-relaxed text-cream-dim">
+                May your life always be filled with good health, happiness and continued
+                inspiration. You remain an icon, not just on screen, but in our hearts.
               </p>
               <p className="mt-2 text-[9px] italic leading-tight text-cream-dim">
-                With love,
+                With admiration &amp; love,
                 <br />
-                from Ravi
+                from your well wisher
               </p>
             </div>
           </div>
@@ -310,12 +359,22 @@ function NotePlaceholder() {
           letterSpacing="1.5"
           fill="#20c4f4"
         >
-          4UR 258819
+          {EXAMPLE.serial}
         </text>
         {/* The portrait medallion, as a disc. */}
         <circle cx="163" cy="50" r="27" fill="#123753" stroke="#20c4f4" strokeOpacity=".4" />
         <circle cx="163" cy="42" r="9" fill="#1b4f74" />
         <path d="M148 66c2-9 8-13 15-13s13 4 15 13z" fill="#1b4f74" />
+        <text
+          x="16"
+          y="98"
+          fontFamily="var(--font-ui), system-ui, sans-serif"
+          fontSize="8"
+          letterSpacing="1"
+          fill="#7ddcfb"
+        >
+          reads {EXAMPLE.pretty}
+        </text>
         {/* Guilloche, suggested with three arcs. */}
         {[0, 1, 2].map((i) => (
           <path

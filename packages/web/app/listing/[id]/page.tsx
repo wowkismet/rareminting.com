@@ -1,7 +1,14 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
-import { addToCart, buyNow, publishListing, saveForLater, uploadPhoto } from '@/app/actions.ts';
+import {
+  addToCart,
+  buyNow,
+  frameAndGift,
+  publishListing,
+  saveForLater,
+  uploadPhoto,
+} from '@/app/actions.ts';
 import { NoteDetail } from '@/components/NoteDetail.tsx';
 import { NotePhotos, PhotoUpload } from '@/components/NotePhotos.tsx';
 import { SiteHeader } from '@/components/SiteHeader.tsx';
@@ -258,6 +265,19 @@ export default async function ListingPage({
                     className="rounded-full border border-sand-line px-6 py-3 text-sm text-slate transition-colors hover:border-accent-deep"
                   >
                     Add to cart
+                  </button>
+                </form>
+                {/* The way into framing. It was only reachable from a cart
+                    line before, which is where it is priced but not where
+                    anybody thinks of it -- the thought arrives while looking
+                    at the note. */}
+                <form action={frameAndGift}>
+                  <input type="hidden" name="listingId" value={listing.id} />
+                  <button
+                    type="submit"
+                    className="rounded-full border border-accent-deep px-6 py-3 text-sm text-accent-deep transition-colors hover:bg-accent-deep hover:text-cream"
+                  >
+                    Frame &amp; gift this
                   </button>
                 </form>
                 <form action={saveForLater}>

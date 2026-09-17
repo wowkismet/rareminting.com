@@ -38,23 +38,30 @@ export function FramePicker({
   noteImageUrl,
   frames,
   chosen,
+  open = false,
 }: {
   listingId: string;
   noteImageUrl: string | null;
   frames: readonly Frame[];
   chosen: FrameChoice;
+  /** Arrived here to frame this one, so it opens already. */
+  open?: boolean;
 }) {
   const current = frames.find((f) => f.code === chosen.code);
 
   return (
-    <details open={current !== undefined} className="w-full border-t border-sand-line pt-4">
+    <details
+      id={`frame-${listingId}`}
+      open={open || current !== undefined}
+      className="frame-panel w-full scroll-mt-24 border-t border-sand-line pt-4"
+    >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-dim">
           Frame &amp; gift
         </span>
         <span className="text-sm text-accent-deep underline underline-offset-4">
           {current === undefined
-            ? 'Frame this note'
+            ? 'Frame this note & add a personal message'
             : `${current.name} · ${rupees(current.priceInr)}`}
         </span>
       </summary>

@@ -37,9 +37,9 @@ const rupees = (n: number): string => `₹${n.toLocaleString('en-IN')}`;
 export default async function CartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; frame?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, frame: frameFor } = await searchParams;
   const user = await currentUser();
   if (user === null) redirect('/signin');
 
@@ -216,6 +216,7 @@ export default async function CartPage({
                       listingId={item.listingId}
                       noteImageUrl={item.imageUrl}
                       frames={frames}
+                      open={frameFor === item.listingId}
                       chosen={
                         item.frame ?? {
                           code: null,

@@ -100,8 +100,14 @@ Two consequences worth planning for:
 
 ## 5. Credential handling
 
-Live API keys have been shared in chat twice during this build and must be
-treated as compromised. The standing rule from here:
+Live API keys have been shared in chat three times during this build and must
+all be treated as compromised. The most recent, on 2026-09-17, was a Cashfree
+**production** secret (`cfsk_ma_prod_39ee...`), which was refused rather than
+installed and must be rotated in the Cashfree dashboard before use -- that one
+value both authorises charges and signs webhooks, so anyone holding it can post
+a forged “payment received” and mark any order on this site paid.
+
+The standing rule from here:
 
 - Development runs against the **Cashfree sandbox**. `CASHFREE_MODE` must say
   `production` in as many words before a real charge is possible, so a

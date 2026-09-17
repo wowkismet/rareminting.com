@@ -1,6 +1,6 @@
 # Compliance and pre-launch checklist
 
-**Operating entity: Lexoraa Luxury Private Limited.** Rare Minting is a brand of
+**Operating entity: Lenvon Industries Private Limited.** Rare Minting is a brand of
 that company. Everything below follows from that — the legal name on the site,
 on invoices, and on the merchant account must all be the same entity.
 
@@ -18,10 +18,10 @@ inventing a grievance officer would put a false record on a public site.
 
 | Field | Value | Where it appears |
 | --- | --- | --- |
-| Legal name | Lexoraa Luxury Private Limited | Footer, About, invoices, gateway |
-| CIN | U46620MH2009PTC197360 | Footer, About |
-| GSTIN | 27AACCJ2555L1ZC | Commission invoices |
-| Registered address | Office No. 1028, IJMIMA Complex, Mind Space, Malad West, Mumbai 400064 | Footer or Contact page |
+| Legal name | Lenvon Industries Private Limited | Footer, About, invoices, gateway |
+| CIN | U46498MH2025PTC463514 | Footer, About |
+| GSTIN | _to supply_ | Commission invoices |
+| Registered address | Office No. S 8, Pinnacle Business Park, Mumbai, Maharashtra 400093 | Footer or Contact page |
 | Grievance officer: name | _to supply_ | Contact page |
 | Grievance officer: email | _to supply_ | Contact page |
 | Grievance officer: phone | _to supply_ | Contact page |
@@ -61,7 +61,7 @@ insured shipping and an unboxing video become mandatory.
 - **No implication of official affiliation.** The brand deliberately avoids the
   Reserve Bank's name. The footer disclaimer is in place and the codebase carries
   a standing note not to introduce RBI naming into copy, titles or metadata.
-- **Entity attribution.** The footer names Lexoraa Luxury Private Limited.
+- **Entity attribution.** The footer names Lenvon Industries Private Limited.
 - **Consent is recorded, not assumed.** `users.consent_version` and
   `consented_at` exist for DPDP purposes.
 - **Identity numbers are never stored in the clear.** `kyc_documents` keeps a
@@ -78,19 +78,21 @@ insured shipping and an unboxing video become mandatory.
 
 Collecting a buyer's money and later paying a seller is payment aggregation,
 which requires an RBI licence. The way a marketplace avoids needing one is to use
-a licensed gateway's **split-settlement product** — Razorpay Route, Cashfree Easy
-Split, or equivalent — so funds settle directly and never rest in the company's
-own account.
+a licensed gateway's **split-settlement product** — for Cashfree, that is Easy
+Split — so funds settle directly and never rest in the company's own account.
 
-Confirm Route is enabled on the Lexoraa Luxury merchant account. Plain checkout
-cannot pay sellers, and enabling Route later can need separate approval.
+The gateway is Cashfree. Confirm **Easy Split is enabled** on the Lenvon
+Industries merchant account: plain checkout can take a buyer's money but cannot
+pay a seller, and enabling Easy Split later can need separate approval. Until it
+is on, payouts are made by hand — which the code already does, and which is a
+workload question rather than a licensing one only while volumes are small.
 
 Two consequences worth planning for:
 
 - The **merchant display name** shown at checkout and on card statements should
   be recognisable to someone who bought from "Rare Minting". A statement reading
-  only "Lexoraa Luxury" is a chargeback risk.
-- **Invoices for platform commission** are issued by Lexoraa Luxury Private
+  only "Lenvon Industries" is a chargeback risk.
+- **Invoices for platform commission** are issued by Lenvon Industries Private
   Limited under its GSTIN. Seller payouts are net of commission, GST on that
   commission, and TDS under §194-O. Confirm the current rates with your CA
   rather than hard-coding what a rate is today — `commission_rules` stores them
@@ -101,7 +103,12 @@ Two consequences worth planning for:
 Live API keys have been shared in chat twice during this build and must be
 treated as compromised. The standing rule from here:
 
-- Development runs on **test keys** (`rzp_test_`).
+- Development runs against the **Cashfree sandbox**. `CASHFREE_MODE` must say
+  `production` in as many words before a real charge is possible, so a
+  half-configured environment takes no money rather than taking it wrongly.
+- Cashfree signs its webhooks with the **same secret key** as the API, so that
+  one value is enough both to move money and to forge a “payment received”.
+  There is no separate webhook secret to compartmentalise.
 - Live keys exist **only** in `/etc/rareminting.env` on the server, `chmod 600`,
   typed there directly and never committed, pasted, or emailed.
 - `.gitignore` already excludes `.env` and `*.env`. The repository is public, so

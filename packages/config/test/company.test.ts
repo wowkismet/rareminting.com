@@ -8,6 +8,7 @@ import {
   gstinCheckDigit,
   parseCin,
   parseGstin,
+  registrationLine,
   statesAgree,
 } from '../src/index.ts';
 
@@ -21,25 +22,43 @@ import {
  */
 
 describe('the operating entity', () => {
-  it('carries a GSTIN that passes its own checksum', () => {
+  /**
+   * The GSTIN is nullable, because the entity behind the brand changed and the
+   * new one's number is not yet held. These tests therefore check a
+   * conditional: if a GSTIN is published it must be a real, self-consistent
+   * one — and if none is, nothing must be published in its place.
+   *
+   * Written this way deliberately rather than deleted. The dangerous mistake
+   * is not an absent GSTIN, it is a stale one inherited from the previous
+   * operator, and that is exactly what these would catch.
+   */
+
+  it('publishes either a GSTIN that passes its own checksum, or none', () => {
+    if (COMPANY.gstin === null) {
+      assert.equal(COMPANY.pan, null, 'a PAN without a GSTIN has nothing to be checked against');
+      return;
+    }
     const result = parseGstin(COMPANY.gstin);
     assert.equal(result.ok, true, result.ok ? '' : result.reason);
   });
 
   it('is registered in Maharashtra, matching the Mumbai address', () => {
+    assert.equal(COMPANY.address.state, 'Maharashtra');
+    if (COMPANY.gstin === null) return;
     const result = parseGstin(COMPANY.gstin);
     assert.ok(result.ok);
     assert.equal(result.parts.stateName, 'Maharashtra');
-    assert.equal(COMPANY.address.state, 'Maharashtra');
   });
 
   it('has a GSTIN identifying a company, not an individual', () => {
+    if (COMPANY.gstin === null) return;
     const result = parseGstin(COMPANY.gstin);
     assert.ok(result.ok);
     assert.equal(result.parts.isCompany, true);
   });
 
   it('has a PAN consistent with its GSTIN', () => {
+    if (COMPANY.gstin === null) return;
     const result = parseGstin(COMPANY.gstin);
     assert.ok(result.ok);
     assert.equal(
@@ -58,6 +77,14 @@ describe('the operating entity', () => {
   });
 
   it('agrees with itself about which state it is in', () => {
+    if (COMPANY.gstin === null) {
+      // With no GSTIN to cross-check, the CIN's own state code is all there is
+      // — and it still has to match the address we print beside it.
+      const cin = parseCin(COMPANY.cin);
+      assert.ok(cin.ok);
+      assert.equal(cin.parts.stateCode, 'MH');
+      return;
+    }
     assert.equal(statesAgree(COMPANY.gstin, COMPANY.cin), true);
   });
 
@@ -73,12 +100,30 @@ describe('the operating entity', () => {
   });
 
   it('formats an address and an attribution line', () => {
-    assert.match(formattedAddress(), /IJMIMA Complex/);
-    assert.match(formattedAddress(), /Mumbai, Maharashtra 400064$/);
+    assert.match(formattedAddress(), /Pinnacle Business Park/);
+    assert.match(formattedAddress(), /Mumbai, Maharashtra 400093$/);
     assert.equal(
       brandAttribution(),
-      'Rare Minting is a brand of Lexoraa Luxury Private Limited.',
+      'Rare Minting is a brand of Lenvon Industries Private Limited.',
     );
+  });
+
+  it('leaves no empty gap in the address when there is no locality line', () => {
+    // The second line is null for this office. A template that interpolated it
+    // blindly would print ", ," in the middle of the registered address.
+    assert.equal(COMPANY.address.line2, null);
+    assert.doesNotMatch(formattedAddress(), /,\s*,/);
+  });
+
+  it('names only the registration numbers it actually holds', () => {
+    const line = registrationLine();
+    assert.ok(line !== null);
+    assert.match(line, new RegExp(`CIN ${COMPANY.cin}`));
+    if (COMPANY.gstin === null) {
+      assert.doesNotMatch(line, /GSTIN/, 'a GSTIN we do not have must not be labelled');
+    } else {
+      assert.match(line, new RegExp(`GSTIN ${COMPANY.gstin}`));
+    }
   });
 
   it('publishes a grievance officer who can actually be reached', () => {

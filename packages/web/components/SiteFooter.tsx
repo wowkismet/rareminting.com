@@ -1,4 +1,4 @@
-import { auctionsEnabled, COMPANY, formattedAddress } from '@rareminting/config';
+import { auctionsEnabled, COMPANY, formattedAddress, registrationLine } from '@rareminting/config';
 
 /**
  * The site footer: every page, every policy, and who is behind the site.
@@ -90,9 +90,7 @@ export function SiteFooter({ noteCount }: { noteCount?: number | undefined }) {
           <address className="max-w-3xl text-xs not-italic leading-relaxed text-cream-dim">
             {formattedAddress()}
             <br />
-            <span className="font-mono">
-              CIN {COMPANY.cin} · GSTIN {COMPANY.gstin}
-            </span>
+            <span className="font-mono">{registrationLine()}</span>
           </address>
 
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-cream-dim">

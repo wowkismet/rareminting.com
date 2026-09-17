@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { COMPANY, formattedAddress } from '@rareminting/config';
+import { COMPANY, formattedAddress, registrationLine } from '@rareminting/config';
 
 import { PolicyPage, Section } from '@/components/PolicyPage.tsx';
 
@@ -31,11 +31,7 @@ export default function ContactPage() {
           <br />
           {formattedAddress()}
           <br />
-          <span className="font-mono text-sm">
-            CIN {COMPANY.cin}
-            <br />
-            GSTIN {COMPANY.gstin}
-          </span>
+          <span className="font-mono text-sm">{registrationLine()}</span>
         </address>
       </Section>
 

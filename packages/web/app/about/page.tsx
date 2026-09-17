@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { COMPANY, formattedAddress } from '@rareminting/config';
+import { COMPANY, formattedAddress, registrationLine } from '@rareminting/config';
 
 import { SiteHeader } from '@/components/SiteHeader.tsx';
 import { SiteFooter } from '@/components/SiteFooter.tsx';
@@ -9,7 +9,7 @@ import { currentUser } from '@/lib/session.ts';
 export const metadata: Metadata = {
   title: 'About us',
   description:
-    'Rare Minting is a marketplace for banknotes whose serial numbers match the dates that matter. A brand of Lexoraa Luxury Private Limited.',
+    'Rare Minting is a marketplace for banknotes whose serial numbers match the dates that matter. A brand of Lenvon Industries Private Limited.',
   alternates: { canonical: '/about' },
 };
 export const dynamic = 'force-dynamic';
@@ -67,9 +67,7 @@ export default async function AboutPage() {
           <address className="not-italic text-sm text-slate-dim">
             {formattedAddress()}
             <br />
-            <span className="font-mono">
-              CIN {COMPANY.cin} &middot; GSTIN {COMPANY.gstin}
-            </span>
+            <span className="font-mono">{registrationLine()}</span>
           </address>
           <p className="text-sm text-slate-dim">
             We are an independent collectibles marketplace. We are not affiliated with, endorsed

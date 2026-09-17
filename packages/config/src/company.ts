@@ -17,12 +17,21 @@ export interface Company {
   /** The consumer-facing brand this entity trades as. */
   readonly brand: string;
   readonly cin: string;
-  readonly gstin: string;
-  /** PAN, derived from characters 3–12 of the GSTIN. */
-  readonly pan: string;
+  /**
+   * Null until the entity is GST-registered.
+   *
+   * Nullable on purpose. A GSTIN belongs to one company, and carrying a
+   * previous operator's number across to a new one would put somebody else's
+   * tax identity on our invoices. Showing nothing is recoverable; showing the
+   * wrong number is not.
+   */
+  readonly gstin: string | null;
+  /** PAN, derived from characters 3–12 of the GSTIN. Null while that is. */
+  readonly pan: string | null;
   readonly address: {
     readonly line1: string;
-    readonly line2: string;
+    /** The locality line, where there is one. Null rather than invented. */
+    readonly line2: string | null;
     readonly city: string;
     readonly state: string;
     readonly postalCode: string;
@@ -42,17 +51,20 @@ export interface Company {
 }
 
 export const COMPANY: Company = {
-  legalName: 'Lexoraa Luxury Private Limited',
+  legalName: 'Lenvon Industries Private Limited',
   brand: 'Rare Minting',
-  cin: 'U46620MH2009PTC197360',
-  gstin: '27AACCJ2555L1ZC',
-  pan: 'AACCJ2555L',
+  cin: 'U46498MH2025PTC463514',
+  // Not yet supplied for this entity. The previous operator's GSTIN and PAN
+  // were deliberately not carried over: they identify a different company.
+  // Every page that shows these omits the line while they are null.
+  gstin: null,
+  pan: null,
   address: {
-    line1: 'Office No. 1028, IJMIMA Complex',
-    line2: 'Mind Space, Malad West',
+    line1: 'Office No. S 8, Pinnacle Business Park',
+    line2: null,
     city: 'Mumbai',
     state: 'Maharashtra',
-    postalCode: '400064',
+    postalCode: '400093',
     countryCode: 'IN',
   },
   grievanceOfficer: {
@@ -71,10 +83,26 @@ export const COMPANY: Company = {
 /** Single-line address, for a footer or an invoice header. */
 export function formattedAddress(company: Company = COMPANY): string {
   const { line1, line2, city, state, postalCode } = company.address;
-  return `${line1}, ${line2}, ${city}, ${state} ${postalCode}`;
+  // Joined rather than interpolated, so a missing locality line does not leave
+  // a stray comma in the middle of the address.
+  return [line1, line2, city, `${state} ${postalCode}`]
+    .filter((part): part is string => part !== null && part !== '')
+    .join(', ');
 }
 
-/** "Rare Minting is a brand of Lexoraa Luxury Private Limited." */
+/**
+ * The registration numbers, as a line, omitting any not yet held.
+ *
+ * Returns null when there are none to show, so a caller renders nothing at all
+ * rather than a label with an empty value after it.
+ */
+export function registrationLine(company: Company = COMPANY): string | null {
+  const parts = [`CIN ${company.cin}`];
+  if (company.gstin !== null) parts.push(`GSTIN ${company.gstin}`);
+  return parts.length === 0 ? null : parts.join(' · ');
+}
+
+/** "Rare Minting is a brand of Lenvon Industries Private Limited." */
 export function brandAttribution(company: Company = COMPANY): string {
   return `${company.brand} is a brand of ${company.legalName}.`;
 }

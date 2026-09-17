@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { COMPANY, REFUND_POLICY } from '@rareminting/config';
+import { COMPANY, formattedAddress, REFUND_POLICY } from '@rareminting/config';
 
 import { PolicyPage, Rows, Section } from '@/components/PolicyPage.tsx';
 
@@ -165,8 +165,7 @@ export default function PrivacyPage() {
           . We aim to respond within {REFUND_POLICY.inspectionWindowDays * 10} days.
         </p>
         <p className="text-sm text-slate-dim">
-          {COMPANY.legalName}, {COMPANY.address.line1}, {COMPANY.address.line2},{' '}
-          {COMPANY.address.city} {COMPANY.address.postalCode}.
+          {COMPANY.legalName}, {formattedAddress()}.
         </p>
       </Section>
     </PolicyPage>

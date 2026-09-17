@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { COMPANY, REFUND_POLICY, rupees } from '@rareminting/config';
+import { COMPANY, formattedAddress, REFUND_POLICY, rupees } from '@rareminting/config';
 
 import { PolicyPage, Section } from '@/components/PolicyPage.tsx';
 
@@ -219,8 +219,7 @@ export default function RefundsPage() {
             </address>
           )}
           <p className="text-slate-dim">
-            {COMPANY.legalName}, {COMPANY.address.line1}, {COMPANY.address.line2},{' '}
-            {COMPANY.address.city} {COMPANY.address.postalCode}.
+            {COMPANY.legalName}, {formattedAddress()}.
           </p>
         </Section>
     </PolicyPage>

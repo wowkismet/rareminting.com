@@ -90,8 +90,6 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             <PayButton
               orderId={order.id}
               amountInr={order.totalInr}
-              buyerName={user.fullName}
-              buyerEmail={user.email}
             />
           </div>
         )}

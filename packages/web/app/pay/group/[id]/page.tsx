@@ -192,8 +192,6 @@ export default async function PayGroupPage({ params }: { params: Promise<{ id: s
               <PayButton
                 groupId={group.id}
                 amountInr={group.totalInr}
-                buyerName={user.fullName}
-                buyerEmail={user.email}
                 label={`Pay ${rupees(group.totalInr)}`}
               />
             )}

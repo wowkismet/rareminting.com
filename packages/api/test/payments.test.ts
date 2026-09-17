@@ -3,35 +3,50 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import type { PGlite } from '@electric-sql/pglite';
 
-import { approveSeller, createRig, request, addAddress, reset, sellerBody, TEST_IP } from './helpers.ts';
+import {
+  approveSeller,
+  createRig,
+  request,
+  addAddress,
+  reset,
+  sellerBody,
+  TEST_IP,
+} from './helpers.ts';
 import type { App } from '../src/app.ts';
 import {
-  checkoutSignatureValid,
-  paymentFromWebhook,
-  razorpayConfig,
+  cashfreeConfig,
+  eventFromWebhook,
+  paiseToRupees,
+  rupeesToPaise,
   webhookSignatureValid,
-} from '../src/razorpay.ts';
+} from '../src/cashfree.ts';
 
 /**
- * Payments.
+ * Payments, through Cashfree.
  *
  * The tests that matter here are the hostile ones. A webhook is an
  * unauthenticated endpoint that moves orders into "paid", so the signature is
  * the only thing between it and anyone marking any order paid — and webhooks
  * retry, so applying one twice must not do the work twice.
+ *
+ * The other theme is arithmetic. Cashfree talks in rupees with two decimals
+ * and this system holds integer paise, so every amount crosses a conversion on
+ * the way in and on the way out. A rounding bug there is a real loss on every
+ * order, and it is the kind that goes unnoticed for months.
  */
 
-const KEY_ID = 'rzp_test_TESTKEY000000';
-const KEY_SECRET = 'test-secret-not-a-real-key';
-const WEBHOOK_SECRET = 'test-webhook-secret';
+const APP_ID = 'TEST0000000000000000000000';
+const SECRET = 'cfsk_test_not_a_real_key';
 
 let pg: PGlite;
 let app: App;
 
 before(async () => {
-  process.env['RAZORPAY_KEY_ID'] = KEY_ID;
-  process.env['RAZORPAY_KEY_SECRET'] = KEY_SECRET;
-  process.env['RAZORPAY_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
+  process.env['CASHFREE_APP_ID'] = APP_ID;
+  process.env['CASHFREE_SECRET_KEY'] = SECRET;
+  // Left unset on purpose: anything but "production" must point at the
+  // sandbox, and a test suite is never allowed near real money.
+  delete process.env['CASHFREE_MODE'];
 
   const rig = await createRig();
   pg = rig.pg;
@@ -39,9 +54,8 @@ before(async () => {
 });
 
 after(async () => {
-  delete process.env['RAZORPAY_KEY_ID'];
-  delete process.env['RAZORPAY_KEY_SECRET'];
-  delete process.env['RAZORPAY_WEBHOOK_SECRET'];
+  delete process.env['CASHFREE_APP_ID'];
+  delete process.env['CASHFREE_SECRET_KEY'];
   await pg.close();
 });
 
@@ -89,33 +103,42 @@ async function orderFor(priceInr = 4500): Promise<{ buyer: string; orderId: stri
   return { buyer, orderId: order.id };
 }
 
-/** Post a signed webhook, the way Razorpay would. */
-function webhook(body: unknown, secret = WEBHOOK_SECRET): Promise<Response> {
+/** Sign and post a webhook, the way Cashfree would. */
+function webhook(
+  body: unknown,
+  { secret = SECRET, timestamp = String(Math.floor(Date.now() / 1000)) } = {},
+): Promise<Response> {
   const raw = JSON.stringify(body);
-  const signature = createHmac('sha256', secret).update(raw, 'utf8').digest('hex');
+  const signature = createHmac('sha256', secret).update(`${timestamp}${raw}`, 'utf8').digest('base64');
   return app.handle(
-    new Request('http://api.test/v1/webhooks/razorpay', {
+    new Request('http://api.test/v1/webhooks/cashfree', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-razorpay-signature': signature },
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-signature': signature,
+        'x-webhook-timestamp': timestamp,
+      },
       body: raw,
     }),
     TEST_IP,
   );
 }
 
-function capturedEvent(gatewayOrderId: string, amountPaise: number, paymentId = 'pay_TEST1') {
+/** Cashfree reports rupees, so every fixture here is built from rupees. */
+function successEvent(gatewayOrderId: string, amountPaise: number, paymentId = '1453002795') {
+  const rupees = paiseToRupees(amountPaise);
   return {
-    event: 'payment.captured',
-    payload: {
+    type: 'PAYMENT_SUCCESS_WEBHOOK',
+    event_time: new Date().toISOString(),
+    data: {
+      order: { order_id: gatewayOrderId, order_amount: rupees, order_currency: 'INR' },
       payment: {
-        entity: {
-          id: paymentId,
-          order_id: gatewayOrderId,
-          amount: amountPaise,
-          currency: 'INR',
-          status: 'captured',
-          method: 'upi',
-        },
+        cf_payment_id: paymentId,
+        payment_status: 'SUCCESS',
+        payment_amount: rupees,
+        payment_currency: 'INR',
+        payment_message: '00::Transaction success',
+        payment_group: 'upi',
       },
     },
   };
@@ -123,10 +146,10 @@ function capturedEvent(gatewayOrderId: string, amountPaise: number, paymentId = 
 
 /** Stand in for the gateway call, which the tests never make. */
 async function fakeGatewayOrder(orderId: string, amountPaise: number): Promise<string> {
-  const gatewayOrderId = `order_TEST${Math.random().toString(36).slice(2, 10)}`;
+  const gatewayOrderId = `RM-TEST-${Math.random().toString(36).slice(2, 10)}`;
   await pg.query(
     `insert into payments (order_id, gateway, gateway_order_id, amount_paise, state)
-     values ($1, 'razorpay', $2, $3, 'created')`,
+     values ($1, 'cashfree', $2, $3, 'created')`,
     [orderId, gatewayOrderId, amountPaise],
   );
   return gatewayOrderId;
@@ -145,40 +168,98 @@ async function paymentState(gatewayOrderId: string): Promise<string> {
   return r.rows[0]!.state;
 }
 
-describe('signature checking', () => {
-  it('accepts a genuine checkout signature and rejects a forged one', () => {
-    const config = razorpayConfig()!;
-    const good = createHmac('sha256', KEY_SECRET).update('order_1|pay_1').digest('hex');
-    assert.equal(checkoutSignatureValid(config, 'order_1', 'pay_1', good), true);
-    assert.equal(checkoutSignatureValid(config, 'order_1', 'pay_1', 'f'.repeat(64)), false);
-    // A signature for a different payment must not work for this one.
-    assert.equal(checkoutSignatureValid(config, 'order_1', 'pay_2', good), false);
+describe('money crossing the gateway boundary', () => {
+  it('converts paise to the rupee figure Cashfree wants', () => {
+    assert.equal(paiseToRupees(449900), 4499);
+    assert.equal(paiseToRupees(1015), 10.15);
+    assert.equal(paiseToRupees(1), 0.01);
+    assert.equal(paiseToRupees(0), 0);
   });
 
-  it('rejects a malformed signature without throwing', () => {
-    const config = razorpayConfig()!;
-    for (const bad of ['', 'not-hex', 'ab', 'x'.repeat(64)]) {
-      assert.equal(checkoutSignatureValid(config, 'order_1', 'pay_1', bad), false);
+  it('converts the rupee figure back without losing a paisa', () => {
+    // 10.15 cannot be represented exactly in binary floating point; it arrives
+    // from JSON as 10.149999999999999. Truncating would make this 1014 and
+    // quietly short every such order by a paisa.
+    assert.equal(rupeesToPaise(10.15), 1015);
+    assert.equal(rupeesToPaise(4499), 449900);
+    assert.equal(rupeesToPaise(0.01), 1);
+    assert.equal(rupeesToPaise(170.0), 17000);
+  });
+
+  it('round-trips every amount it is given', () => {
+    for (const paise of [1, 99, 100, 1015, 4499_00, 12_345_67, 99_99_999]) {
+      assert.equal(rupeesToPaise(paiseToRupees(paise)), paise, `${paise} did not survive`);
     }
   });
 
-  it('verifies a webhook over the exact bytes it was signed with', () => {
-    const config = razorpayConfig()!;
-    const raw = '{"event":"payment.captured","payload":{}}';
-    const sig = createHmac('sha256', WEBHOOK_SECRET).update(raw).digest('hex');
+  it('refuses a fractional paisa rather than rounding money away', () => {
+    assert.throws(() => paiseToRupees(10.5));
+  });
+});
 
-    assert.equal(webhookSignatureValid(config, raw, sig), true);
-    // Re-serialising changes the bytes, so the signature must fail — which is
-    // exactly why the route reads the raw body rather than the parsed object.
-    assert.equal(webhookSignatureValid(config, JSON.stringify(JSON.parse(raw)), sig), true);
-    assert.equal(webhookSignatureValid(config, `${raw} `, sig), false);
+describe('signature checking', () => {
+  it('accepts a genuine signature and rejects a forged one', () => {
+    const config = cashfreeConfig()!;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const raw = '{"type":"PAYMENT_SUCCESS_WEBHOOK"}';
+    const good = createHmac('sha256', SECRET).update(`${timestamp}${raw}`, 'utf8').digest('base64');
+
+    assert.equal(webhookSignatureValid(config, timestamp, raw, good), true);
+    assert.equal(webhookSignatureValid(config, timestamp, raw, 'AAAA'), false);
+    assert.equal(webhookSignatureValid(config, timestamp, `${raw} `, good), false);
   });
 
-  it('rejects a webhook signed with the API secret instead of the webhook secret', () => {
-    const config = razorpayConfig()!;
-    const raw = '{"event":"payment.captured"}';
-    const wrongKey = createHmac('sha256', KEY_SECRET).update(raw).digest('hex');
-    assert.equal(webhookSignatureValid(config, raw, wrongKey), false);
+  it('signs the timestamp and body together, not the body alone', () => {
+    // Signing only the body would let a captured webhook be replayed for ever.
+    const config = cashfreeConfig()!;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const raw = '{"a":1}';
+    const bodyOnly = createHmac('sha256', SECRET).update(raw, 'utf8').digest('base64');
+    assert.equal(webhookSignatureValid(config, timestamp, raw, bodyOnly), false);
+  });
+
+  it('refuses a signature that is old, however well formed', () => {
+    const config = cashfreeConfig()!;
+    const raw = '{"a":1}';
+    const old = String(Math.floor(Date.now() / 1000) - 3600);
+    const signature = createHmac('sha256', SECRET).update(`${old}${raw}`, 'utf8').digest('base64');
+
+    assert.equal(webhookSignatureValid(config, old, raw, signature), false);
+    // ...and is accepted when the clock is wound back to when it was sent.
+    assert.equal(
+      webhookSignatureValid(config, old, raw, signature, { now: Number(old) * 1000 }),
+      true,
+    );
+  });
+
+  it('rejects a malformed signature or timestamp without throwing', () => {
+    const config = cashfreeConfig()!;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    assert.equal(webhookSignatureValid(config, timestamp, 'body', 'not base64 !!'), false);
+    assert.equal(webhookSignatureValid(config, timestamp, 'body', ''), false);
+    assert.equal(webhookSignatureValid(config, 'yesterday', 'body', 'AAAA'), false);
+  });
+
+  it('stays on the sandbox unless production is spelled out', () => {
+    assert.equal(cashfreeConfig()!.isTest, true);
+    assert.match(cashfreeConfig()!.baseUrl, /sandbox\.cashfree\.com/);
+
+    process.env['CASHFREE_MODE'] = 'production';
+    try {
+      assert.equal(cashfreeConfig()!.isTest, false);
+      assert.equal(cashfreeConfig()!.baseUrl, 'https://api.cashfree.com/pg');
+    } finally {
+      delete process.env['CASHFREE_MODE'];
+    }
+
+    // Anything that is not exactly "production" is the sandbox. A typo must
+    // not be the thing standing between a test and a real charge.
+    process.env['CASHFREE_MODE'] = 'Production';
+    try {
+      assert.equal(cashfreeConfig()!.isTest, true);
+    } finally {
+      delete process.env['CASHFREE_MODE'];
+    }
   });
 });
 
@@ -187,26 +268,28 @@ describe('starting a payment', () => {
     const { orderId } = await orderFor();
     const stranger = await signUp();
     const res = await request(app, 'POST', `/v1/orders/${orderId}/payment`, { token: stranger });
-    assert.equal(res.status, 404, 'a stranger learned that this order exists');
+    assert.equal(res.status, 404);
   });
 
   it('requires signing in', async () => {
     const { orderId } = await orderFor();
-    const res = await request(app, 'POST', `/v1/orders/${orderId}/payment`, {});
+    const res = await request(app, 'POST', `/v1/orders/${orderId}/payment`);
     assert.equal(res.status, 401);
   });
 
   it('reports plainly when no gateway is configured', async () => {
-    const saved = process.env['RAZORPAY_KEY_ID'];
-    delete process.env['RAZORPAY_KEY_ID'];
+    const { buyer, orderId } = await orderFor();
+    const appId = process.env['CASHFREE_APP_ID'];
+    delete process.env['CASHFREE_APP_ID'];
     try {
-      const { buyer, orderId } = await orderFor();
       const res = await request(app, 'POST', `/v1/orders/${orderId}/payment`, { token: buyer });
       assert.equal(res.status, 503);
-      const body = (await res.json()) as { error: string };
+      const body = (await res.json()) as { error: string; message: string };
       assert.equal(body.error, 'payments_unavailable');
+      // The buyer needs to know their order survived and they were not charged.
+      assert.match(body.message, /nothing was charged/i);
     } finally {
-      process.env['RAZORPAY_KEY_ID'] = saved;
+      process.env['CASHFREE_APP_ID'] = appId;
     }
   });
 });
@@ -214,10 +297,10 @@ describe('starting a payment', () => {
 describe('the webhook', () => {
   it('refuses an unsigned request', async () => {
     const res = await app.handle(
-      new Request('http://api.test/v1/webhooks/razorpay', {
+      new Request('http://api.test/v1/webhooks/cashfree', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(capturedEvent('order_X', 450000)),
+        body: JSON.stringify(successEvent('RM-TEST-x', 100)),
       }),
       TEST_IP,
     );
@@ -225,23 +308,31 @@ describe('the webhook', () => {
   });
 
   it('refuses a request signed with the wrong secret', async () => {
-    const res = await webhook(capturedEvent('order_X', 450000), 'attacker-guess');
+    const res = await webhook(successEvent('RM-TEST-x', 100), { secret: 'not-the-secret' });
     assert.equal(res.status, 401);
   });
 
-  it('marks an order paid on a genuine capture', async () => {
+  it('refuses a replay from an hour ago', async () => {
     const { orderId } = await orderFor();
-    const total = (
-      await pg.query<{ total_paise: string }>(
-        `select total_paise::text as total_paise from orders where id = $1`,
-        [orderId],
-      )
-    ).rows[0]!.total_paise;
-    const gatewayOrderId = await fakeGatewayOrder(orderId, Number(total));
+    const gatewayOrderId = await fakeGatewayOrder(orderId, 456_000);
+    const old = String(Math.floor(Date.now() / 1000) - 3600);
 
-    assert.equal(await orderState(orderId), 'payment_pending');
+    const before = await orderState(orderId);
+    const res = await webhook(successEvent(gatewayOrderId, 456_000), { timestamp: old });
+    assert.equal(res.status, 401);
+    assert.equal(await orderState(orderId), before, 'a stale replay must move nothing');
+  });
 
-    const res = await webhook(capturedEvent(gatewayOrderId, Number(total)));
+  it('marks an order paid on a genuine success', async () => {
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
+    );
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
+
+    const res = await webhook(successEvent(gatewayOrderId, amount));
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { received: true, acted: true });
 
@@ -250,190 +341,181 @@ describe('the webhook', () => {
   });
 
   it('is idempotent — the same event twice changes nothing the second time', async () => {
-    const { orderId } = await orderFor();
-    const total = Number(
-      (
-        await pg.query<{ total_paise: string }>(
-          `select total_paise::text as total_paise from orders where id = $1`,
-          [orderId],
-        )
-      ).rows[0]!.total_paise,
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
     );
-    const gatewayOrderId = await fakeGatewayOrder(orderId, total);
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
 
-    const first = await webhook(capturedEvent(gatewayOrderId, total));
-    const second = await webhook(capturedEvent(gatewayOrderId, total));
-
+    const first = await webhook(successEvent(gatewayOrderId, amount));
     assert.deepEqual(await first.json(), { received: true, acted: true });
-    assert.deepEqual(await second.json(), { received: true, acted: false }, 'a retry acted twice');
 
-    const count = await pg.query<{ n: string }>(
-      `select count(*)::text as n from payments where gateway_order_id = $1`,
-      [gatewayOrderId],
+    const second = await webhook(successEvent(gatewayOrderId, amount));
+    assert.equal(second.status, 200);
+    assert.deepEqual(await second.json(), { received: true, acted: false });
+
+    const audits = await pg.query<{ n: string }>(
+      `select count(*)::text as n from audit_logs
+        where action = 'payment.captured' and entity_id = $1`,
+      [orderId],
     );
-    assert.equal(count.rows[0]!.n, '1');
-    assert.equal(await orderState(orderId), 'paid');
+    assert.equal(audits.rows[0]!.n, '1', 'a retry must not write a second audit line');
   });
 
   it('refuses to accept a payment for less than the order total', async () => {
     const { orderId } = await orderFor(4500);
-    const total = Number(
-      (
-        await pg.query<{ total_paise: string }>(
-          `select total_paise::text as total_paise from orders where id = $1`,
-          [orderId],
-        )
-      ).rows[0]!.total_paise,
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
     );
-    const gatewayOrderId = await fakeGatewayOrder(orderId, total);
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
+    const before = await orderState(orderId);
 
-    // One rupee. If this were accepted, a note could be bought for nothing.
-    const res = await webhook(capturedEvent(gatewayOrderId, 100));
+    // One rupee short.
+    const res = await webhook(successEvent(gatewayOrderId, amount - 100));
     assert.equal(res.status, 200);
 
-    assert.equal(await orderState(orderId), 'payment_pending', 'an underpaid order was marked paid');
+    assert.equal(await orderState(orderId), before, 'a short payment must not pay an order');
     assert.equal(await paymentState(gatewayOrderId), 'failed');
   });
 
   it('ignores an event for a payment we never created', async () => {
-    const { orderId } = await orderFor();
-    const res = await webhook(capturedEvent('order_NEVER_SEEN', 450000));
+    const res = await webhook(successEvent('RM-SOMEBODY-ELSE', 500_00));
+    assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { received: true, acted: false });
-    assert.equal(await orderState(orderId), 'payment_pending');
   });
 
   it('records a failure without touching the order', async () => {
-    const { orderId } = await orderFor();
-    const total = Number(
-      (
-        await pg.query<{ total_paise: string }>(
-          `select total_paise::text as total_paise from orders where id = $1`,
-          [orderId],
-        )
-      ).rows[0]!.total_paise,
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
     );
-    const gatewayOrderId = await fakeGatewayOrder(orderId, total);
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
+    const before = await orderState(orderId);
 
     const failed = {
-      event: 'payment.failed',
-      payload: {
+      type: 'PAYMENT_FAILED_WEBHOOK',
+      data: {
+        order: { order_id: gatewayOrderId, order_amount: paiseToRupees(amount) },
         payment: {
-          entity: {
-            id: 'pay_FAIL',
-            order_id: gatewayOrderId,
-            amount: total,
-            status: 'failed',
-            method: 'card',
-            error_description: 'Card declined',
-          },
+          cf_payment_id: '999',
+          payment_status: 'FAILED',
+          payment_amount: paiseToRupees(amount),
+          payment_message: 'Insufficient funds',
+          payment_group: 'credit_card',
         },
       },
     };
-    await webhook(failed);
 
+    const res = await webhook(failed);
+    assert.equal(res.status, 200);
     assert.equal(await paymentState(gatewayOrderId), 'failed');
-    assert.equal(await orderState(orderId), 'payment_pending', 'a failure changed the order');
+    assert.equal(await orderState(orderId), before, 'the buyer can still try again');
+  });
+
+  it('leaves the order alone when the buyer simply closed the window', async () => {
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
+    );
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
+    const before = await orderState(orderId);
+
+    const dropped = {
+      type: 'PAYMENT_USER_DROPPED_WEBHOOK',
+      data: {
+        order: { order_id: gatewayOrderId, order_amount: paiseToRupees(amount) },
+        payment: {
+          cf_payment_id: '1000',
+          payment_status: 'USER_DROPPED',
+          payment_amount: paiseToRupees(amount),
+          payment_group: 'upi',
+        },
+      },
+    };
+
+    const res = await webhook(dropped);
+    assert.equal(res.status, 200);
+    // Walking away is not a failed payment. The attempt stays open so the
+    // buyer can come back to it.
+    assert.equal(await paymentState(gatewayOrderId), 'created');
+    assert.equal(await orderState(orderId), before);
   });
 
   it('does not let a later failure undo a captured payment', async () => {
-    const { orderId } = await orderFor();
-    const total = Number(
-      (
-        await pg.query<{ total_paise: string }>(
-          `select total_paise::text as total_paise from orders where id = $1`,
-          [orderId],
-        )
-      ).rows[0]!.total_paise,
+    const { orderId } = await orderFor(4500);
+    const total = await pg.query<{ total_paise: string }>(
+      `select total_paise::text as total_paise from orders where id = $1`,
+      [orderId],
     );
-    const gatewayOrderId = await fakeGatewayOrder(orderId, total);
+    const amount = Number(total.rows[0]!.total_paise);
+    const gatewayOrderId = await fakeGatewayOrder(orderId, amount);
 
-    await webhook(capturedEvent(gatewayOrderId, total));
+    await webhook(successEvent(gatewayOrderId, amount));
+    assert.equal(await paymentState(gatewayOrderId), 'captured');
+
+    // Out-of-order delivery: the failure for an earlier attempt arrives after
+    // the success. It must not unpay the order.
     await webhook({
-      event: 'payment.failed',
-      payload: {
+      type: 'PAYMENT_FAILED_WEBHOOK',
+      data: {
+        order: { order_id: gatewayOrderId, order_amount: paiseToRupees(amount) },
         payment: {
-          entity: { id: 'pay_LATE', order_id: gatewayOrderId, amount: total, status: 'failed' },
+          cf_payment_id: '998',
+          payment_status: 'FAILED',
+          payment_amount: paiseToRupees(amount),
+          payment_message: 'Declined',
         },
       },
     });
 
-    assert.equal(await paymentState(gatewayOrderId), 'captured', 'a capture was undone');
+    assert.equal(await paymentState(gatewayOrderId), 'captured');
     assert.equal(await orderState(orderId), 'paid');
   });
 
-  it('acknowledges an event it cannot act on, so Razorpay stops retrying', async () => {
-    const res = await webhook({ event: 'subscription.charged', payload: {} });
+  it('acknowledges an event it cannot act on, so Cashfree stops retrying', async () => {
+    const res = await webhook({ type: 'SOMETHING_NEW_WEBHOOK', data: {} });
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { received: true, acted: false });
-  });
-});
-
-describe('the browser callback', () => {
-  it('never marks an order paid, however valid its signature', async () => {
-    const { buyer, orderId } = await orderFor();
-    const total = Number(
-      (
-        await pg.query<{ total_paise: string }>(
-          `select total_paise::text as total_paise from orders where id = $1`,
-          [orderId],
-        )
-      ).rows[0]!.total_paise,
-    );
-    const gatewayOrderId = await fakeGatewayOrder(orderId, total);
-
-    const signature = createHmac('sha256', KEY_SECRET)
-      .update(`${gatewayOrderId}|pay_BROWSER`)
-      .digest('hex');
-
-    const res = await request(app, 'POST', '/v1/payments/checkout-callback', {
-      token: buyer,
-      body: { gatewayOrderId, gatewayPaymentId: 'pay_BROWSER', signature },
-    });
-    assert.equal(res.status, 200);
-
-    // The signature was genuine and it still did not move the order.
-    assert.equal(await orderState(orderId), 'payment_pending', 'the browser marked an order paid');
-  });
-
-  it('rejects a forged signature', async () => {
-    const { buyer, orderId } = await orderFor();
-    const gatewayOrderId = await fakeGatewayOrder(orderId, 450000);
-    const res = await request(app, 'POST', '/v1/payments/checkout-callback', {
-      token: buyer,
-      body: { gatewayOrderId, gatewayPaymentId: 'pay_X', signature: 'a'.repeat(64) },
-    });
-    assert.equal(res.status, 400);
-  });
-
-  it('will not let one buyer attach a payment to another buyer\'s order', async () => {
-    const { orderId } = await orderFor();
-    const gatewayOrderId = await fakeGatewayOrder(orderId, 450000);
-    const stranger = await signUp();
-
-    const signature = createHmac('sha256', KEY_SECRET)
-      .update(`${gatewayOrderId}|pay_Y`)
-      .digest('hex');
-
-    const res = await request(app, 'POST', '/v1/payments/checkout-callback', {
-      token: stranger,
-      body: { gatewayOrderId, gatewayPaymentId: 'pay_Y', signature },
-    });
-    assert.equal(res.status, 404);
   });
 });
 
 describe('parsing a webhook envelope', () => {
-  it('pulls out the payment', () => {
-    const parsed = paymentFromWebhook(capturedEvent('order_1', 12345));
-    assert.equal(parsed?.id, 'pay_TEST1');
-    assert.equal(parsed?.orderId, 'order_1');
-    assert.equal(parsed?.amountPaise, 12345);
-    assert.equal(parsed?.method, 'upi');
+  it('pulls out the payment and translates the event name', () => {
+    const parsed = eventFromWebhook(successEvent('RM-TEST-1', 449900));
+    assert.ok(parsed !== null);
+    assert.equal(parsed.event, 'payment.captured');
+    assert.equal(parsed.payment.id, '1453002795');
+    assert.equal(parsed.payment.orderId, 'RM-TEST-1');
+    assert.equal(parsed.payment.amountPaise, 449900, 'rupees must arrive as paise');
+    assert.equal(parsed.payment.status, 'captured');
+    assert.equal(parsed.payment.method, 'upi');
+  });
+
+  it('accepts a numeric payment id as well as a string one', () => {
+    const body = successEvent('RM-TEST-2', 100);
+    (body.data.payment as { cf_payment_id: unknown }).cf_payment_id = 1453002795;
+    const parsed = eventFromWebhook(body);
+    assert.ok(parsed !== null);
+    assert.equal(parsed.payment.id, '1453002795');
   });
 
   it('returns null for anything shaped wrong, rather than throwing', () => {
-    for (const bad of [null, undefined, 'string', 42, {}, { payload: {} }, { payload: { payment: {} } }]) {
-      assert.equal(paymentFromWebhook(bad), null);
-    }
+    assert.equal(eventFromWebhook(null), null);
+    assert.equal(eventFromWebhook({}), null);
+    assert.equal(eventFromWebhook({ type: 'PAYMENT_SUCCESS_WEBHOOK' }), null);
+    assert.equal(eventFromWebhook({ type: 'UNKNOWN', data: { payment: {} } }), null);
+    assert.equal(
+      eventFromWebhook({ type: 'PAYMENT_SUCCESS_WEBHOOK', data: { payment: { cf_payment_id: 'x' } } }),
+      null,
+      'a payment with no amount is not a payment',
+    );
   });
 });

@@ -16,7 +16,7 @@
 
 import { Pool } from 'pg';
 
-import { fetchOrderPayments, razorpayConfig } from './razorpay.ts';
+import { fetchOrderPayments, cashfreeConfig } from './cashfree.ts';
 
 interface PendingRow {
   order_id: string;
@@ -36,12 +36,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const config = razorpayConfig();
+  const config = cashfreeConfig();
   if (config === null) {
-    console.error('Razorpay is not configured; nothing to reconcile against.');
+    console.error('Cashfree is not configured; nothing to reconcile against.');
     process.exit(1);
   }
-  console.log(`Gateway: ${config.keyId} (${config.isTest ? 'test' : 'LIVE'})`);
+  console.log(`Gateway: Cashfree ${config.appId} (${config.isTest ? 'sandbox' : 'LIVE'})`);
   console.log(apply ? 'Mode: applying changes\n' : 'Mode: report only, use --apply to act\n');
 
   const pool = new Pool({ connectionString });
@@ -53,6 +53,7 @@ async function main(): Promise<void> {
          from payments p
          join orders o on o.id = p.order_id
         where p.gateway_order_id is not null
+          and p.gateway = 'cashfree'
           and p.state in ('created', 'authorized')
           and o.state in ('created', 'payment_pending')
         order by o.created_at`,

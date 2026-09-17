@@ -27,6 +27,7 @@ import { one, type Database } from '../db.ts';
 import { computeBreakdown, DEFAULT_RATES, type Rates } from '../money.ts';
 import { computeCharges } from '../charges.ts';
 import { checkCoupon } from './coupons.ts';
+import { reconcileGroup } from './payments.ts';
 
 interface CartRow {
   listing_id: string;
@@ -448,6 +449,14 @@ export function registerCheckoutRoutes(router: Router, database: Database): void
     if (ctx.session === null) throw unauthorized();
     const id = ctx.params['id'] ?? '';
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw conflict('No such order group.');
+
+    // Cashfree sends the buyer back to this page with nothing but an order id,
+    // so this is where they find out whether their money went through. Ask the
+    // gateway before answering: a webhook that has not landed yet would
+    // otherwise leave somebody looking at "awaiting payment" for a basket they
+    // have already been charged for. It only calls out when a payment attempt
+    // is genuinely outstanding.
+    await reconcileGroup(ctx, database, id);
 
     const group = await ctx.db.query<{
       id: string;

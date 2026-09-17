@@ -87,10 +87,20 @@ NODE_ENV=production
 PORT=4000
 HOST=127.0.0.1
 TRUST_PROXY=1
-# Payment keys go here. Use rzp_test_ until the flow is proven.
-# RAZORPAY_KEY_ID=
-# RAZORPAY_KEY_SECRET=
-# RAZORPAY_WEBHOOK_SECRET=
+# Cashfree. The App ID is semi-public; the secret key is not, and belongs
+# here and in a password manager and nowhere else -- never in the repository,
+# a ticket, or a chat window. Cashfree signs its webhooks with this same
+# secret, so leaking it is enough to forge a "payment received".
+#
+# CASHFREE_MODE must say production in as many words before real money can be
+# taken; anything else points at the sandbox. Leave it unset while testing.
+# CASHFREE_APP_ID=
+# CASHFREE_SECRET_KEY=
+# CASHFREE_MODE=production
+#
+# Where Cashfree sends the buyer back to, and where it posts webhooks. Both
+# must be reachable from the public internet.
+SITE_URL=https://${PRIMARY}
 # SMS provider for one-time codes. Unset means OTP is switched off, and the
 # service says so rather than letting anyone past.
 # SMS_PROVIDER=

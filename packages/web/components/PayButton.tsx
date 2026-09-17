@@ -5,41 +5,48 @@ import { useState } from 'react';
 /**
  * The pay button.
  *
- * A client component because Razorpay's checkout is a script that opens a modal
- * over the page — there is no server-rendered form that can do it.
+ * A client component because Cashfree's checkout is a script that takes over
+ * the page — there is no server-rendered form that can do it.
  *
- * The flow: ask our API to start a payment, open Razorpay with what it returns,
- * and report the result back. That report is a courtesy, not the record. The
- * order is marked paid by a webhook arriving at our server, which is why the
- * message afterwards says we are confirming rather than claiming it is done.
+ * The flow: ask our API to start a payment, hand the session it returns to
+ * Cashfree's SDK, and let Cashfree redirect the browser away. It comes back to
+ * the order page, which asks Cashfree directly what happened before it says
+ * anything to the buyer. Nothing the browser reports is treated as payment —
+ * under this flow it is not even asked, because the redirect back carries an
+ * order id and nothing else.
  */
 
 interface StartResponse {
-  keyId: string;
+  provider: string;
   gatewayOrderId: string;
+  paymentSessionId: string;
   amountPaise: number;
   currency: string;
   orderNumber: string;
+  mode: 'sandbox' | 'production';
   isTest: boolean;
 }
 
-interface RazorpayResponse {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
+interface CashfreeCheckout {
+  checkout: (options: {
+    paymentSessionId: string;
+    redirectTarget?: string;
+  }) => Promise<{ error?: { message?: string } } | void>;
 }
 
 // The checkout script attaches itself to window.
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+    Cashfree?: ((options: { mode: string }) => CashfreeCheckout) & {
+      new (options: { mode: string }): CashfreeCheckout;
+    };
   }
 }
 
-const SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
+const SCRIPT = 'https://sdk.cashfree.com/js/v3/cashfree.js';
 
 function loadCheckout(): Promise<void> {
-  if (window.Razorpay !== undefined) return Promise.resolve();
+  if (window.Cashfree !== undefined) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${SCRIPT}"]`);
     if (existing !== null) {
@@ -56,12 +63,25 @@ function loadCheckout(): Promise<void> {
   });
 }
 
+/**
+ * Cashfree's SDK has shipped both as a plain factory and as a constructor.
+ * Try it as a factory first and fall back, rather than pinning this integration
+ * to whichever form the CDN is serving this month.
+ */
+function initialise(mode: string): CashfreeCheckout {
+  const factory = window.Cashfree;
+  if (factory === undefined) throw new Error('SDK missing');
+  try {
+    return factory({ mode });
+  } catch {
+    return new factory({ mode });
+  }
+}
+
 export function PayButton({
   orderId,
   groupId,
   amountInr,
-  buyerName,
-  buyerEmail,
   label = 'Pay now',
 }: {
   /** One order. Give this or groupId, not both. */
@@ -69,8 +89,6 @@ export function PayButton({
   /** A whole basket, paid for once. */
   groupId?: string;
   amountInr: number;
-  buyerName: string | null;
-  buyerEmail: string;
   label?: string;
 }) {
   // A basket and a single order are the same transaction from the buyer's
@@ -95,45 +113,29 @@ export function PayButton({
       }
 
       await loadCheckout();
-      if (window.Razorpay === undefined) {
+      if (window.Cashfree === undefined) {
         setError('The payment window could not be loaded. Check your connection and try again.');
         return;
       }
 
-      const checkout = new window.Razorpay({
-        key: body.keyId,
-        order_id: body.gatewayOrderId,
-        amount: body.amountPaise,
-        currency: body.currency,
-        name: 'Rare Minting',
-        description: `Order ${body.orderNumber}`,
-        prefill: { name: buyerName ?? '', email: buyerEmail },
-        theme: { color: '#071a2b' },
-        handler: async (response: RazorpayResponse) => {
-          await fetch('/pay/callback', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              gatewayOrderId: response.razorpay_order_id,
-              gatewayPaymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature,
-            }),
-          });
-          setMessage(
-            'Payment received. We are confirming it with the payment provider — this page updates within a moment.',
-          );
-          // The webhook does the real work; reload to pick it up.
-          setTimeout(() => window.location.reload(), 4000);
-        },
-        modal: {
-          ondismiss: () => {
-            setBusy(false);
-            setMessage('Payment cancelled. Your order is still here whenever you want to pay.');
-          },
-        },
+      const result = await initialise(body.mode).checkout({
+        paymentSessionId: body.paymentSessionId,
+        // Take over the whole page rather than opening a modal. Cashfree then
+        // returns the buyer to the order page, which is the one place that
+        // checks with the gateway before saying anything about their money.
+        redirectTarget: '_self',
       });
 
-      checkout.open();
+      // Reached only when the SDK refused before navigating; a successful
+      // checkout has already taken the page away by now.
+      if (result !== undefined && result !== null && 'error' in result && result.error) {
+        setError(
+          result.error.message ?? 'The payment could not be started. Nothing was charged.',
+        );
+        return;
+      }
+
+      setMessage('Taking you to the payment page…');
     } catch {
       setError('Something went wrong starting the payment. Nothing was charged.');
     } finally {
@@ -147,6 +149,7 @@ export function PayButton({
         type="button"
         onClick={() => void pay()}
         disabled={busy}
+        aria-label={label}
         className="rounded-full bg-primary px-8 py-3 text-sm font-medium text-cream transition-colors hover:bg-secondary disabled:opacity-60"
       >
         {busy ? 'Opening…' : `Pay ₹${amountInr.toLocaleString('en-IN')}`}

@@ -17,6 +17,7 @@ import { registerAdminRoutes } from './routes/admin.ts';
 import { registerMediaRoutes } from './routes/media.ts';
 import { registerOrderRoutes } from './routes/orders.ts';
 import { registerPaymentRoutes } from './routes/payments.ts';
+import { registerShippingRoutes } from './routes/shipping.ts';
 import { registerPayoutRoutes } from './routes/payouts.ts';
 import { registerAuctionRoutes } from './routes/auctions.ts';
 import { registerBasketRoutes } from './routes/basket.ts';
@@ -46,6 +47,7 @@ export function createApp(db: Database): App {
   registerMediaRoutes(router);
   registerOrderRoutes(router, db);
   registerPaymentRoutes(router, db);
+  registerShippingRoutes(router, db);
   registerPayoutRoutes(router, db);
   registerAuctionRoutes(router, db);
   registerBasketRoutes(router, db);

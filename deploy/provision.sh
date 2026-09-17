@@ -101,6 +101,16 @@ TRUST_PROXY=1
 # Where Cashfree sends the buyer back to, and where it posts webhooks. Both
 # must be reachable from the public internet.
 SITE_URL=https://${PRIMARY}
+# Shiprocket, the delivery partner. The password is a real account password,
+# not a scoped API key -- it signs in to the dashboard too -- so it belongs
+# here and in a password manager and nowhere else. SHIPROCKET_PICKUP_LOCATION
+# must match a pickup nickname that exists in the dashboard or every booking
+# is refused. The webhook token is invented here and pasted into Shiprocket;
+# it is all the authentication their callback offers.
+# SHIPROCKET_EMAIL=
+# SHIPROCKET_PASSWORD=
+# SHIPROCKET_PICKUP_LOCATION=Primary
+# SHIPROCKET_WEBHOOK_TOKEN=
 # SMS provider for one-time codes. Unset means OTP is switched off, and the
 # service says so rather than letting anyone past.
 # SMS_PROVIDER=
